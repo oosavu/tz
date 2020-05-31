@@ -44,7 +44,7 @@ int main()
 {
     GeneratorEngine engine;
     std::ofstream file("/home/oosavu/example.bin", ios::binary);
-    for(int i = 0; i < 100; i++)
+    for(int i = 0; i < 5; i++)
         engine.write(file);
     file.close();
     return 0;

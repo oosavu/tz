@@ -18,7 +18,7 @@ std::vector<size_t> findChunkBounds(std::ifstream &file, size_t averageChunkSize
 {
     file.seekg (0, file.end);
     size_t fileSize = file.tellg();
-    cout << "fileSize:" << fileSize << endl;
+    cout << "input file size:" << fileSize << endl;
 
     std::vector<size_t> res;
     res.push_back(0);
@@ -40,13 +40,15 @@ std::vector<size_t> findChunkBounds(std::ifstream &file, size_t averageChunkSize
             break;
     }
     return res;
+
 }
 
 struct LineInfo{
     unsigned int num;
     size_t start;
     size_t strStart;
-    size_t end;
+    size_t finis;
+
 };
 
 std::vector<size_t> sortIndexes(const std::vector<LineInfo> &lineData, const std::vector<char> &data)
@@ -56,38 +58,48 @@ std::vector<size_t> sortIndexes(const std::vector<LineInfo> &lineData, const std
     const char* rawData = data.data();
     sort(idx.begin(), idx.end(),
          [&](size_t l1, size_t l2) {
-        if (std::strcmp(&rawData[lineData[l1].strStart], &rawData[lineData[l2].strStart]) > 0)
+        int cmp = std::strcmp(&rawData[lineData[l1].strStart], &rawData[lineData[l2].strStart]);
+        if (cmp < 0)
             return true;
-        return lineData[l1].num > lineData[l2].num;
+        else if (cmp > 0)
+            return false;
+        else
+            return lineData[l1].num > lineData[l2].num;
     });
 
     return idx;
 }
 
+//cout << lineInfo.start <<endl;
+//size_t lineEnd = distance(data.begin(), it);
+// std::from_chars() does not supported in gcc75
+// std::string_view does not supported by stoi
+// stoi does not support char*
+//while(rawData[lineInfo.strStart] != '.')
+//    lineInfo.strStart++;
+
+
 std::vector<LineInfo> collectChunkInfo(std::vector<char> &data)
 {
     std::vector<LineInfo> lines;
-    auto it = std::find(data.begin(), data.end(), '\n');
+    auto i = data.begin(), end = data.end();
+    //end--; //drop the last '\n'
     char* rawData = data.data();
-    for (; it != data.end(); ++it)
+    while(i != end)
     {
         LineInfo lineInfo;
-        lineInfo.start = std::distance(data.begin(), it);
-        cout << lineInfo.start <<endl;
-        //size_t lineEnd = distance(data.begin(), it);
-        // std::from_chars() does not supported in gcc75
-        // std::string_view does not supported by stoi
-        // stoi does not support char*
+        lineInfo.start = std::distance(data.begin(), i);
         lineInfo.num =  static_cast<unsigned int>(std::atoi(&rawData[lineInfo.start]));
-        lineInfo.strStart = lineInfo.start + 1; // minimum one charecter for digit
-        while(rawData[lineInfo.strStart] != '.')
-            lineInfo.strStart++;
-        lineInfo.strStart++;
-        if(lines.size() != 0)
-            lines[lines.size() - 1].end = lineInfo.start;
+        auto dotPosition = std::find(i, end, '.');
+        dotPosition ++; // skip dot
+        //dotPosition ++; // skip space
+        lineInfo.strStart = distance(data.begin(), dotPosition);
+        i = std::find(dotPosition, end, '\n');
+        i++;
+        lineInfo.finis = distance(data.begin(), i);
+        cout << rawData[lineInfo.strStart] << endl;
         lines.emplace_back(lineInfo);
     }
-    lines.back().end = data.size();
     return lines;
 }
 
@@ -96,7 +108,7 @@ void saveSortedChunk(const std::vector<size_t> &idx, const std::vector<LineInfo>
     std::ofstream file(filePath, std::ios::binary);
     for(size_t i : idx)
     {
-        file.write(&rawData[lineInfo[i].start], lineInfo[i].end - lineInfo[i].start);
+        file.write(&rawData[lineInfo[i].start], lineInfo[i].finis - lineInfo[i].start);
     }
     file.close();
 }
@@ -111,6 +123,8 @@ void sortChunks(std::ifstream &file, std::vector<size_t> chunkBounds)
         file.read(data.data(), data.size());
         std::vector<LineInfo> lineData = collectChunkInfo(data);
         std::vector<size_t> idx = sortIndexes(lineData, data);
+        for(size_t i : idx)
+            cout << i  <<  ": "<< lineData[i].num << data[lineData[i].strStart]<< endl;
         saveSortedChunk(idx, lineData, data.data(), "/home/oosavu/qwe.txt");
     }
 }
