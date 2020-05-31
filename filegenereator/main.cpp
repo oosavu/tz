@@ -28,7 +28,7 @@ public:
         for(size_t i = 0; i < len; i++)
             str[i] = posibleChars[m_charDistributor(m_generator)];
         str[len] = 0x00;
-        file << std::to_string(num) << ": " << str << endl;
+        file << std::to_string(num) << ". " << str << endl;
     }
 private:
     std::vector<char> stringBuf;
