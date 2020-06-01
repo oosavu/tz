@@ -3,20 +3,19 @@
 #include <random>
 #include <array>
 #include <fstream>
-#include "cmdopts.h"
 #include <stdio.h>
 #include <chrono>
-
+#include "../cmdopts.h"
 using namespace std;
 
 struct Options
 {
-    uint64_t filesize{100000000};
+    uint64_t filesize{1000000};
     std::string filepath{"/home/oosavu/asd.txt"};
-    int stringsCount{1000};
+    int stringsCount{1};
     int numsCount{1000};
     int maxStrLen{100};
-    int maxNum{100000};
+    int maxNum{10000};
     bool fullRandom{false};
 };
 
@@ -38,7 +37,6 @@ public:
 
     inline std::string genString()
     {
-        //return "sssssssssssssdfsdfffffffffffffffff";
         std::string str;
         size_t len = m_strLenDistributor(m_generator);
         str.resize(len + 1);
@@ -47,13 +45,8 @@ public:
         str[len] = '\n';
         return str;
     }
-
-    inline int genIndex(int max)
-    {
-
-    }
 private:
-    std::array<char, 27> posibleChars ={'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z',' '};
+    std::array<char, 26> posibleChars ={'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z'};
     std::mt19937 m_generator;
     std::uniform_int_distribution<> m_numDistributor;
     std::uniform_int_distribution<> m_strLenDistributor;
@@ -206,9 +199,5 @@ int main(int argc, const char* argv[])
     //        //engine.writeRandom(file);
     //    file.close();
 
-
-
-
-    return 0;
 }
 

@@ -10,9 +10,19 @@
 #include <algorithm>
 #include <string_view>
 #include <cstring>
+#include "../cmdopts.h"
 
-// it's bad practice to use namespace std, however for test job it's ok
+// it's bad practice to use namespace std, however for test job it's ok :)
 using namespace std;
+
+
+struct Options
+{
+    uint64_t chunkSize{100000};
+    std::string inputFile{"/home/oosavu/asd.txt"};
+    std::string outputFile{"/home/oosavu/qwe.txt"};
+    std::string cacheDir{"/home/oosavu"};
+};
 
 vector<size_t> findChunkBounds(ifstream &file, size_t averageChunkSize)
 {
@@ -34,21 +44,31 @@ vector<size_t> findChunkBounds(ifstream &file, size_t averageChunkSize)
         }
         file.seekg(averageGlobalPos, file.beg);
         string line;
-        getline(file, line);
+        getline(file, line); // move to the first '\n' charecter
+
         res.push_back(file.tellg());
-        if(file.eof())
+
+        if(file.tellg() == fileSize) // it was the final line, so just continue
+        {
             break;
+        }
+
     }
+
+    cout << "chunkBounds:";
+    for (size_t i : res)
+        cout << i << " ";
+    cout << endl;
+
     return res;
 
 }
 
 struct LineInfo{
-    unsigned int num;
+    size_t num;
     size_t start;
     size_t strStart;
     size_t finis;
-
 };
 
 vector<size_t> sortIndexes(const vector<LineInfo> &lineData, const vector<char> &data)
@@ -83,12 +103,12 @@ vector<LineInfo> collectChunkInfo(vector<char> &data)
         lineInfo.num =  static_cast<unsigned int>(atoi(&rawData[lineInfo.start]));
         auto dotPosition = find(i, end, '.');
         dotPosition ++; // skip dot
-        //dotPosition ++; // skip space
+        dotPosition ++; // skip space
         lineInfo.strStart = distance(data.begin(), dotPosition);
         i = find(dotPosition, end, '\n');
         i++;
         lineInfo.finis = distance(data.begin(), i);
-        cout << rawData[lineInfo.strStart] << endl;
+        //cout << rawData[lineInfo.strStart] << endl;
         lines.emplace_back(lineInfo);
     }
     return lines;
@@ -104,8 +124,20 @@ void saveSortedChunk(const vector<size_t> &idx, const vector<LineInfo> lineInfo,
     file.close();
 }
 
-void sortChunks(ifstream &file, vector<size_t> chunkBounds)
+std::string genFilePath(const std::string &folder, const std::string &name, int index)
 {
+    return folder + "/" + name + to_string(index); //todo win support.
+}
+
+void createSortedChunks(const Options &opts)
+{
+    ifstream file(opts.inputFile, ios::binary);
+    if(!file)
+        throw string("can't open file:") + opts.inputFile;
+
+    vector<size_t> chunkBounds = findChunkBounds(file, opts.chunkSize);
+
+
     file.seekg (0, file.beg);
     for(size_t chunkIndex = 0; chunkIndex < chunkBounds.size() - 1; chunkIndex++)
     {
@@ -114,26 +146,24 @@ void sortChunks(ifstream &file, vector<size_t> chunkBounds)
         file.read(data.data(), data.size());
         vector<LineInfo> lineData = collectChunkInfo(data);
         vector<size_t> idx = sortIndexes(lineData, data);
-        for(size_t i : idx)
-            cout << i  <<  ": "<< lineData[i].num << data[lineData[i].strStart]<< endl;
-        saveSortedChunk(idx, lineData, data.data(), "/home/oosavu/qwe.txt");
+        cout <<  lineData[0].num << data[lineData[0].strStart]<< endl;
+        //for(size_t i : idx)
+        //    cout << i  <<  ": "<< lineData[i].num << data[lineData[i].strStart]<< endl;
+        saveSortedChunk(idx, lineData, data.data(), genFilePath(opts.cacheDir, "chunk", chunkIndex));
     }
 }
 
-void createSortedChunks(const string &filePath)
-{
-    ifstream file(filePath, ios::binary);
-    if(!file)
-        throw string("can't open file:") + filePath.c_str();
-    vector<size_t> chunkBounds = findChunkBounds(file, 1000000);
-    sortChunks(file, chunkBounds);
-}
 
-
-int main()
+int main(int argc, const char* argv[])
 {
+    auto parser = CmdOpts<Options>::Create({{"--chunkSize", &Options::chunkSize },
+                                            {"--inputFile", &Options::inputFile },
+                                            {"--outputFile", &Options::outputFile},
+                                            {"--cacheDir", &Options::cacheDir}});
+    auto opts = parser->parse(argc, argv);
+
     try {
-        createSortedChunks("/home/oosavu/example.bin");
+        createSortedChunks(opts);
     } catch (string s) {
         cerr << "ERROR:" << s << endl;;
         return -1;
