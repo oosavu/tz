@@ -5,19 +5,42 @@
 
 using namespace std;
 
-std::vector<size_t> Sorter::findChunkBounds(ifstream &file, size_t averageChunkSize)
+void Sorter::process()
+{
+    ifstream file(m_inputFile, ios::binary);
+    if(!file)
+        throw string("can't open file:") + m_inputFile;
+
+    vector<size_t> chunkBounds = findChunkBounds(file);
+
+    file.seekg (0, file.beg);
+    for(size_t chunkIndex = 0; chunkIndex < chunkBounds.size() - 1; chunkIndex++)
+    {
+        size_t chunkSize = chunkBounds[chunkIndex + 1] - chunkBounds[chunkIndex];
+        vector<char> data(chunkSize);
+        file.read(data.data(), data.size());
+        vector<LineInfo> lineData = collectChunkInfo(data);
+        vector<size_t> idx = sortIndexes(lineData, data);
+        cout <<  lineData[0].num << data[lineData[0].strStart]<< endl;
+        //for(size_t i : idx)
+        //    cout << i  <<  ": "<< lineData[i].num << data[lineData[i].strStart]<< endl;
+        saveSortedChunk(idx, lineData, data.data(), genFilePath(m_cacheFolder, "chunk", chunkIndex));
+    }
+}
+
+std::vector<size_t> Sorter::findChunkBounds(ifstream &file)
 {
     file.seekg(0, file.end);
-    size_t fileSize = file.tellg();
+    int64_t fileSize = file.tellg();
     cout << "input file size:" << fileSize << endl;
 
     vector<size_t> res;
     res.push_back(0);
 
-    size_t averageGlobalPos = 0;
+    int64_t averageGlobalPos = 0;
     while(true)
     {
-        averageGlobalPos += averageChunkSize;
+        averageGlobalPos += m_averageChunkSize;
         if(averageGlobalPos >= fileSize)
         {
             res.push_back(fileSize);
@@ -29,11 +52,8 @@ std::vector<size_t> Sorter::findChunkBounds(ifstream &file, size_t averageChunkS
 
         res.push_back(file.tellg());
 
-        if(file.tellg() == fileSize) // it was the final line, so just continue
-        {
+        if(file.tellg() == fileSize) // it was the final line, so just break
             break;
-        }
-
     }
 
     cout << "chunkBounds:";
@@ -52,13 +72,13 @@ std::vector<size_t> Sorter::sortIndexes(const std::vector<Sorter::LineInfo> &lin
     const char* rawData = data.data();
     sort(idx.begin(), idx.end(),
          [&](size_t l1, size_t l2) {
-        int cmp = strcmp(&rawData[lineData[l1].strStart], &rawData[lineData[l2].strStart]);
+        int cmp = customSTRCMP(&rawData[lineData[l1].strStart], &rawData[lineData[l2].strStart]);
         if (cmp < 0)
             return true;
         else if (cmp > 0)
             return false;
         else
-            return lineData[l1].num > lineData[l2].num;
+            return lineData[l1].num < lineData[l2].num;
     });
 
     return idx;
@@ -68,7 +88,6 @@ std::vector<Sorter::LineInfo> Sorter::collectChunkInfo(std::vector<char> &data)
 {
     vector<LineInfo> lines;
     auto i = data.begin(), end = data.end();
-    //end--; //drop the last '\n'
     char* rawData = data.data();
     while(i != end)
     {
@@ -98,33 +117,29 @@ void Sorter::saveSortedChunk(const std::vector<size_t> &idx, const std::vector<S
     file.close();
 }
 
-void Sorter::createSortedChunks()
-{
-    ifstream file(m_inputFile, ios::binary);
-    if(!file)
-        throw string("can't open file:") + m_inputFile;
 
-    vector<size_t> chunkBounds = findChunkBounds(file, m_chunkSize);
-
-
-    file.seekg (0, file.beg);
-    for(size_t chunkIndex = 0; chunkIndex < chunkBounds.size() - 1; chunkIndex++)
-    {
-        size_t chunkSize = chunkBounds[chunkIndex + 1] - chunkBounds[chunkIndex];
-        vector<char> data(chunkSize);
-        file.read(data.data(), data.size());
-        vector<LineInfo> lineData = collectChunkInfo(data);
-        vector<size_t> idx = sortIndexes(lineData, data);
-        cout <<  lineData[0].num << data[lineData[0].strStart]<< endl;
-        //for(size_t i : idx)
-        //    cout << i  <<  ": "<< lineData[i].num << data[lineData[i].strStart]<< endl;
-        saveSortedChunk(idx, lineData, data.data(), genFilePath(m_cacheFolder, "chunk", chunkIndex));
-    }
-}
-
-string Sorter::genFilePath(const string &folder, const string &name, int index)
+std::string Sorter::genFilePath(const string &folder, const string &name, int index)
 {
     if(folder.empty())
         return name + to_string(index);
     return folder + "/" + name + to_string(index); //todo win support.
+}
+
+
+//we need to stop strcmp after the \n
+//copypaste from glibc/string/strcmp.c
+char Sorter::customSTRCMP(const char *p1, const char *p2)
+{
+    const unsigned char *s1 = (const unsigned char *) p1;
+    const unsigned char *s2 = (const unsigned char *) p2;
+    unsigned char c1, c2;
+    do
+    {
+        c1 = (unsigned char) *s1++;
+        c2 = (unsigned char) *s2++;
+        if (c1 == '\n') // '\0'
+            return c1 - c2;
+    }
+    while (c1 == c2);
+    return c1 - c2;
 }

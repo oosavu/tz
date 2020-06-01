@@ -10,7 +10,7 @@ using namespace std;
 
 struct Options
 {
-    uint64_t filesize{1000000};
+    int64_t filesize{1000000};
     std::string filepath{"/home/oosavu/asd.txt"};
     int stringsCount{1};
     int numsCount{1000};
@@ -78,7 +78,7 @@ int main(int argc, const char* argv[])
     //slow variant, no big memory cache usage
     if (opts.fullRandom)
     {
-        uint64_t count = 0;
+        int64_t count = 0;
         while (count < opts.filesize)
         {
             std::string num = engine.genNum();
@@ -104,7 +104,7 @@ int main(int argc, const char* argv[])
         std::uniform_int_distribution<> numIndexDistributor(0, opts.numsCount - 1);
         std::uniform_int_distribution<> stringIndexDistributor(0, opts.stringsCount - 1);
 
-        uint64_t count = 0; // file.getp wery slow!
+        int64_t count = 0; // file.getp wery slow!
         while (count < opts.filesize)
         {
             int numIndex = numIndexDistributor(indexGenerator);
