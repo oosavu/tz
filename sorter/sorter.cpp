@@ -144,7 +144,7 @@ void Sorter::merge()
         else if (cmp > 0)
             return false;
         else
-            return lineInfol1.num < lineInfol2.num;
+            return lineInfol1.num > lineInfol2.num;
     };
 
     make_heap(indexHeap.begin(), indexHeap.end(), compartator);
@@ -157,11 +157,11 @@ void Sorter::merge()
     {
         pop_heap(indexHeap.begin(), indexHeap.end());
         size_t poppedIndex = indexHeap.back();
-        cout << poppedIndex << endl;
         const LineInfo &lineInfo = m_chunks[poppedIndex].chunkIndexData.at(currLineNum[poppedIndex]);
+        //cout << poppedIndex << " " << currLineNum[poppedIndex] << " " << m_chunks[poppedIndex].chunkData.data()[lineInfo.start - m_chunks[poppedIndex].byteGlobalOffset] <<  endl;
 
         outputStream.write(&m_chunks[poppedIndex].chunkData.data()[lineInfo.start - m_chunks[poppedIndex].byteGlobalOffset], lineInfo.finis - lineInfo.start);
-        push_heap(indexHeap.begin(), indexHeap.end(), compartator);
+
         currLineNum.at(poppedIndex) ++;
         if(currLineNum.at(poppedIndex) >= m_chunks[poppedIndex].chunkIndexData.size())
         {
@@ -169,6 +169,8 @@ void Sorter::merge()
             if(!m_chunks[poppedIndex].loadNextChunk())
                 indexHeap.pop_back();
         }
+        push_heap(indexHeap.begin(), indexHeap.end(), compartator);
+
     }
 
     outputStream.close();
@@ -193,7 +195,7 @@ void Sorter::saveSortedChunk(const std::vector<size_t> &idx, const std::vector<S
     chunkOfChunksBound.push_back(ChunkOfChunkInfo{0, 0, 0, 0});
     size_t m_averageChunkOfChunkEnd = m_averageChunkOfChunkSize;
 
-    std::vector<LineInfo> sortedLinesInfo(linesInfo.size());
+    std::vector<LineInfo> sortedLinesInfo;//(linesInfo.size());
     size_t globalPosition = 0;
     for(size_t i = 0; i < idx.size(); i++)
     {
@@ -219,6 +221,7 @@ void Sorter::saveSortedChunk(const std::vector<size_t> &idx, const std::vector<S
     chunkOfChunksBound.back().finisByte = globalPosition;
     chunkOfChunksBound.back().finisLineInfoIndex = globalPosition;
     chunkFile.close();
+    indexFile.close();
 
 
     cout << "chunkOfChunksBounds " << chunkIndex << ": ";
