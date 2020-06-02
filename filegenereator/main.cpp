@@ -10,12 +10,12 @@ using namespace std;
 
 struct Options
 {
-    int64_t filesize{1000000};
+    int64_t filesize{500000};
     std::string filepath{"/home/oosavu/asd.txt"};
-    int stringsCount{1};
-    int numsCount{1000};
-    int maxStrLen{100};
-    int maxNum{10000};
+    int stringsCount{23};
+    int numsCount{100};
+    int maxStrLen{10};
+    int maxNum{1000};
     bool fullRandom{false};
 };
 

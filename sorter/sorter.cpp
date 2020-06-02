@@ -158,9 +158,12 @@ void Sorter::merge()
         pop_heap(indexHeap.begin(), indexHeap.end());
         size_t poppedIndex = indexHeap.back();
         const LineInfo &lineInfo = m_chunks[poppedIndex].chunkIndexData.at(currLineNum[poppedIndex]);
-        //cout << poppedIndex << " " << currLineNum[poppedIndex] << " " << m_chunks[poppedIndex].chunkData.data()[lineInfo.start - m_chunks[poppedIndex].byteGlobalOffset] <<  endl;
+        cout << poppedIndex << " " << currLineNum[poppedIndex] << " " << m_chunks[poppedIndex].chunkData.data()[lineInfo.start - m_chunks[poppedIndex].byteGlobalOffset]
+             <<  m_chunks[poppedIndex].chunkData.data()[lineInfo.start - m_chunks[poppedIndex].byteGlobalOffset + 1]
+              <<  m_chunks[poppedIndex].chunkData.data()[lineInfo.start - m_chunks[poppedIndex].byteGlobalOffset + 2] <<  endl;
 
         outputStream.write(&m_chunks[poppedIndex].chunkData.data()[lineInfo.start - m_chunks[poppedIndex].byteGlobalOffset], lineInfo.finis - lineInfo.start);
+        outputStream.flush();
 
         currLineNum.at(poppedIndex) ++;
         if(currLineNum.at(poppedIndex) >= m_chunks[poppedIndex].chunkIndexData.size())
@@ -179,7 +182,6 @@ void Sorter::merge()
 
 void Sorter::saveSortedChunk(const std::vector<size_t> &idx, const std::vector<Sorter::LineInfo> linesInfo, std::vector<char> &rawData, size_t chunkIndex)
 {
-
     string chunkFilePath = genFilePath(m_cacheFolder, "chunk", chunkIndex);
     ofstream chunkFile(chunkFilePath, ios::binary);
     if(!chunkFile)
@@ -190,12 +192,11 @@ void Sorter::saveSortedChunk(const std::vector<size_t> &idx, const std::vector<S
     if(!indexFile)
         throw string("can't open file:") + chunkIndexFilePath;
 
-    //m_chunkOfChunks.push_back(std::vector<ChunkOfChunkInfo>());
-    vector<ChunkOfChunkInfo> chunkOfChunksBound;// = m_chunkOfChunks.back();
+    vector<ChunkOfChunkInfo> chunkOfChunksBound;
     chunkOfChunksBound.push_back(ChunkOfChunkInfo{0, 0, 0, 0});
-    size_t m_averageChunkOfChunkEnd = m_averageChunkOfChunkSize;
 
-    std::vector<LineInfo> sortedLinesInfo;//(linesInfo.size());
+    size_t m_averageChunkOfChunkEnd = m_averageChunkOfChunkSize;
+    std::vector<LineInfo> sortedLinesInfo;
     size_t globalPosition = 0;
     for(size_t i = 0; i < idx.size(); i++)
     {
@@ -205,7 +206,7 @@ void Sorter::saveSortedChunk(const std::vector<size_t> &idx, const std::vector<S
         chunkFile.write(&rawData.data()[lineInfo.start], lineSize);
         sortedLinesInfo.emplace_back(LineInfo{lineInfo.num, globalPosition, globalPosition + lineInfo.strStart - lineInfo.start, globalPosition + lineSize});
         globalPosition += lineSize;
-        if(globalPosition > m_averageChunkOfChunkEnd)
+        if(globalPosition > m_averageChunkOfChunkEnd && i != idx.size() - 1)
         {
             indexFile.write(reinterpret_cast<char*>(sortedLinesInfo.data()), sortedLinesInfo.size() * sizeof(LineInfo));
             sortedLinesInfo.clear();
@@ -219,8 +220,9 @@ void Sorter::saveSortedChunk(const std::vector<size_t> &idx, const std::vector<S
         chunkOfChunksBound[i].finisLineInfoIndex = chunkOfChunksBound[i + 1].startLineInfoIndex;
     }
     chunkOfChunksBound.back().finisByte = globalPosition;
-    chunkOfChunksBound.back().finisLineInfoIndex = globalPosition;
+    chunkOfChunksBound.back().finisLineInfoIndex = idx.size();
     chunkFile.close();
+    indexFile.write(reinterpret_cast<char*>(sortedLinesInfo.data()), sortedLinesInfo.size() * sizeof(LineInfo));
     indexFile.close();
 
 
@@ -260,16 +262,6 @@ char Sorter::customSTRCMP(const char *p1, const char *p2)
 }
 
 
-//void Sorter::saveSortedChunk(const std::vector<size_t> &idx, const std::vector<Sorter::LineInfo> lineInfo, char *rawData, const string &filePath)
-//{
-//    ofstream file(filePath, ios::binary);
-//    for(size_t i : idx)
-//    {
-//        file.write(&rawData[lineInfo[i].start], lineInfo[i].finis - lineInfo[i].start);
-//    }
-//    file.close();
-//}
-
 Sorter::IterativeChunk::IterativeChunk(const string &dataFilePath, const string &indexFilePath, const std::vector<Sorter::ChunkOfChunkInfo> chunksInfo) :
     dataFilePath(dataFilePath),
     indexFilePath(indexFilePath),
@@ -296,8 +288,9 @@ bool Sorter::IterativeChunk::loadNextChunk()
 
     indexGlobalOffset = chunksInfo[indexOfChunk].startLineInfoIndex;
     byteGlobalOffset = chunksInfo[indexOfChunk].startByte;
-    currChunkSize = chunksInfo[indexOfChunk].finisByte - chunksInfo[indexOfChunk].startByte;
+
     currChunkIndexSize = chunksInfo[indexOfChunk].finisLineInfoIndex - chunksInfo[indexOfChunk].startLineInfoIndex;
+    currChunkSize = chunksInfo[indexOfChunk].finisByte - chunksInfo[indexOfChunk].startByte;
 
     chunkData.resize(currChunkSize);
     dataFile.read(chunkData.data(), chunkData.size());
