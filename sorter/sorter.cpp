@@ -21,11 +21,20 @@ void Sorter::process()
         file.read(data.data(), data.size());
         vector<LineInfo> lineData = collectChunkInfo(data);
         vector<size_t> idx = sortIndexes(lineData, data);
-        cout <<  lineData[0].num << data[lineData[0].strStart]<< endl;
+
+        //cout <<  lineData[0].num << data[lineData[0].strStart]<< endl;
         //for(size_t i : idx)
         //    cout << i  <<  ": "<< lineData[i].num << data[lineData[i].strStart]<< endl;
         saveSortedChunk(idx, lineData, data.data(), genFilePath(m_cacheFolder, "chunk", chunkIndex));
+//        ofstream chunkFile(genFilePath(m_cacheFolder, "chunk", chunkIndex), ios::binary);
+//        for(size_t i : idx)
+//        {
+//            file.write(&rawData[lineInfo[i].start], lineInfo[i].finis - lineInfo[i].start);
+//        }
     }
+    file.close();
+
+
 }
 
 std::vector<size_t> Sorter::findChunkBounds(ifstream &file)
@@ -107,14 +116,37 @@ std::vector<Sorter::LineInfo> Sorter::collectChunkInfo(std::vector<char> &data)
     return lines;
 }
 
-void Sorter::saveSortedChunk(const std::vector<size_t> &idx, const std::vector<Sorter::LineInfo> lineInfo, char *rawData, const string &filePath)
+void Sorter::merge()
+{
+    std::vector<size_t> indexHeap(m_chunkFilesPaths.size());
+    std::vector<ifstream> chunkFiles;
+    std::vector<std::vector<char>> chunksOfChunks;
+    std::vector<std::vector<char>> datas;
+}
+
+void Sorter::saveSortedChunk(const std::vector<size_t> &idx, const std::vector<Sorter::LineInfo> linesInfo, char *rawData, const string &filePath)
 {
     ofstream file(filePath, ios::binary);
-    for(size_t i : idx)
+    if(!file)
+        throw string("can't open file:") + filePath;
+
+    std::vector<LineInfo> sortedLinesInfo(linesInfo.size());
+    size_t globalPosition = 0;
+    for(size_t i = 0; i < idx.size(); i++)
     {
-        file.write(&rawData[lineInfo[i].start], lineInfo[i].finis - lineInfo[i].start);
+        size_t idx_i = idx[i];
+        const LineInfo& lineInfo = linesInfo.at(idx_i);
+        size_t lineSize = lineInfo.finis - lineInfo.start;
+        file.write(&rawData[lineInfo.start], lineSize);
+        sortedLinesInfo[i].num = lineInfo.num;
+        sortedLinesInfo[i].start = globalPosition;
+        sortedLinesInfo[i].finis = globalPosition + lineSize;
+        sortedLinesInfo[i].strStart = globalPosition + lineInfo.strStart - lineInfo.start;
+        globalPosition += lineSize;
     }
     file.close();
+    m_chunkFilesPaths.push_back(filePath);
+    m_sortedChunksInfo.push_back(sortedLinesInfo);
 }
 
 
@@ -143,3 +175,14 @@ char Sorter::customSTRCMP(const char *p1, const char *p2)
     while (c1 == c2);
     return c1 - c2;
 }
+
+
+//void Sorter::saveSortedChunk(const std::vector<size_t> &idx, const std::vector<Sorter::LineInfo> lineInfo, char *rawData, const string &filePath)
+//{
+//    ofstream file(filePath, ios::binary);
+//    for(size_t i : idx)
+//    {
+//        file.write(&rawData[lineInfo[i].start], lineInfo[i].finis - lineInfo[i].start);
+//    }
+//    file.close();
+//}

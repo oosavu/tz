@@ -24,7 +24,7 @@ private:
     std::string m_outputFile;
     size_t m_averageChunkSize;
 
-    std::vector<std::string> m_chunkPaths;
+    std::vector<std::string> m_chunkFilesPaths;
 
     struct LineInfo{
         size_t num; // cached Number
@@ -37,6 +37,10 @@ private:
     std::vector<size_t> findChunkBounds(std::ifstream &file);
     std::vector<size_t> sortIndexes(const std::vector<LineInfo> &lineData, const std::vector<char> &data);
     std::vector<LineInfo> collectChunkInfo(std::vector<char> &data);
+
+    void merge();
+
+    // returns lineInfo for saved data
     void saveSortedChunk(const std::vector<size_t> &idx, const std::vector<LineInfo> lineInfo, char* rawData, const std::string &filePath);
 
     static std::string genFilePath(const std::string &folder, const std::string &name, int index);
