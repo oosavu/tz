@@ -12,9 +12,9 @@ struct Options
 {
     int64_t filesize{50000};
     std::string filepath{"/home/oosavu/asd.txt"};
-    int stringsCount{1};
+    int stringsCount{1000};
     int numsCount{100000};
-    int maxStrLen{1};
+    int maxStrLen{1000};
     int maxNum{200000};
     bool fullRandom{false};
 };
@@ -121,83 +121,5 @@ int main(int argc, const char* argv[])
     float bytesPerSecond = float(opts.filesize) / (float(time) / 1000.0);
     cout << "FINISH. time:" << time << " msec. speed: " << int(bytesPerSecond)  << " bytes/sec" << endl;
     return 0;
-
-    //std::ofstream file(opts.filepath, ios::binary);
-    //std::vector<char> vec(23);
-    //file.rdbuf()->pubsetbuf(&vec.front(), vec.size());
-    //    if(!file)
-    //    {
-    //        cerr << "ERROR: can't open file:" << opts.filepath;
-    //        return 0;
-    //    }
-//    int qwe = 100;
-//    {
-//        FILE* pFile;
-//        pFile = fopen("file.binary", "wb");
-//        setvbuf ( pFile , NULL , _IOFBF , 1024 );
-//        std::chrono::system_clock::time_point startTime = std::chrono::system_clock::now();
-//        string repeat;
-//        int qwe = 10;
-//        repeat.resize(qwe, 'a');
-//        int coun = 0;
-//        while(coun < opts.filesize)
-//        {
-//            coun += qwe;
-//            fwrite(repeat.data(), sizeof(char), repeat.size() , pFile);
-//        }
-//        fflush(pFile);
-//        fclose (pFile);
-//        std::chrono::system_clock::time_point currentTime = std::chrono::system_clock::now();
-//        int time = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count();
-//        float bytesPerSecond = float(opts.filesize) / (float(time) / 1000.0);
-//        cout << "FINISH C. time:" << time << " msec. speed: " << int(bytesPerSecond)  << " bytes/sec" << endl;
-//    }
-
-//    uint64_t qwe = 100;
-//    {
-//        std::ofstream file(opts.filepath, ios::binary);
-//        std::chrono::system_clock::time_point startTime = std::chrono::system_clock::now();
-//        string repeat;
-
-//        repeat.resize(qwe, 'a');
-//        uint64_t coun = 0;
-//        while(coun < 6000000000)
-//        {
-//            coun += qwe;
-//            file.write(repeat.data(), repeat.size());
-//            //fwrite(repeat.data(), sizeof(char), repeat.size() , pFile);
-//        }
-//        file.close();
-//        std::chrono::system_clock::time_point currentTime = std::chrono::system_clock::now();
-//        int time = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count();
-//        float bytesPerSecond = float(opts.filesize) / (float(time) / 1000.0);
-//        cout << "FINISH. time:" << time << " msec. speed: " << int(bytesPerSecond)  << " bytes/sec" << endl;
-//    }
-
-    //just put repeats at the begining of file (TODO ability to distribute it)
-    //    for(int i = 0; i < opts.stringRepeatSeries && file.tellp() < opts.filesize; i++)
-    //    {
-    //        string repeat = engine.genString();
-    //        for(int j = 0; j < opts.stringRepeatSeriesLength && file.tellp() < opts.filesize; j++)
-    //        {
-    //            int num = engine.genNum();
-    //            file << std::to_string(num) << ". " << repeat;
-    //        }
-    //    }
-
-    //string repeat = engine.genString();
-
-
-
-    //while(file.tellp() < opts.filesize)
-    //file << repeat;
-    //    while(coun < opts.filesize)
-    //    {
-    //        coun += qwe;
-    //        file.write(repeat.data(), repeat.size());
-    //    }
-    //        //engine.writeRandom(file);
-    //    file.close();
-
 }
 

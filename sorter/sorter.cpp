@@ -167,11 +167,9 @@ void Sorter::merge()
         currLineNum.at(poppedIndex) ++;
         if(currLineNum[poppedIndex] >= m_chunks[poppedIndex].chunkIndexData.size())
         {
-            cout << "new chunk for:" << poppedIndex;
             currLineNum[poppedIndex] = 0;
             if(!m_chunks[poppedIndex].loadNextChunk())
             {
-                cout << "end for:" << poppedIndex;
                 continue;
             }
                 //indexHeap.pop_back();
