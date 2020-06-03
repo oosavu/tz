@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <iostream>
 #include <numeric>
-
+#include <queue>
 using namespace std;
 
 void Sorter::process()
@@ -125,9 +125,6 @@ void Sorter::merge()
         m_chunks[i].loadNextChunk();
     }
 
-    std::vector<size_t> indexHeap(m_chunks.size());
-    iota(indexHeap.begin(), indexHeap.end(), 0);
-
     std::vector<size_t> currLineNum(m_chunks.size(), 0);
 
     auto compartator = [&](size_t l1, size_t l2) {
@@ -147,16 +144,27 @@ void Sorter::merge()
             return lineInfol1.num > lineInfol2.num;
     };
 
-    make_heap(indexHeap.begin(), indexHeap.end(), compartator);
+    //std::vector<size_t> indexHeap(m_chunks.size());
+    //iota(indexHeap.begin(), indexHeap.end(), 0);
+    //make_heap(indexHeap.begin(), indexHeap.end(), compartator);
+    priority_queue<size_t,  std::vector<size_t>, decltype(compartator)> q(compartator);
+
+    for (int i = 0; i < m_chunks.size(); i++)
+        q.push(i);
 
     ofstream outputStream(m_outputFile, ios::binary);
     if(!outputStream)
         throw string("can't open file: ") + m_outputFile;
 
-    while(!indexHeap.empty())
+    while(!q.empty())
     {
-        pop_heap(indexHeap.begin(), indexHeap.end());
-        size_t poppedIndex = indexHeap.back();
+        //push_heap(indexHeap.begin(), indexHeap.end());
+
+        //auto maxEl = max_element(indexHeap.begin(), indexHeap.end(), compartator);
+        //int poppedIndex = std::distance(indexHeap.begin(), maxEl);
+        size_t poppedIndex = q.top();
+        q.pop();
+
         const LineInfo &lineInfo = m_chunks[poppedIndex].chunkIndexData.at(currLineNum[poppedIndex]);
         cout << poppedIndex << " " << currLineNum[poppedIndex] << " " << m_chunks[poppedIndex].chunkData.data()[lineInfo.start - m_chunks[poppedIndex].byteGlobalOffset]
              <<  m_chunks[poppedIndex].chunkData.data()[lineInfo.start - m_chunks[poppedIndex].byteGlobalOffset + 1]
@@ -166,14 +174,19 @@ void Sorter::merge()
         outputStream.flush();
 
         currLineNum.at(poppedIndex) ++;
-        if(currLineNum.at(poppedIndex) >= m_chunks[poppedIndex].chunkIndexData.size())
+        if(currLineNum[poppedIndex] >= m_chunks[poppedIndex].chunkIndexData.size())
         {
+            cout << "new chunk for:" << poppedIndex;
             currLineNum[poppedIndex] = 0;
             if(!m_chunks[poppedIndex].loadNextChunk())
-                indexHeap.pop_back();
+            {
+                cout << "end for:" << poppedIndex;
+                continue;
+            }
+                //indexHeap.pop_back();
         }
-        push_heap(indexHeap.begin(), indexHeap.end(), compartator);
-
+        q.push(poppedIndex);
+      //  push_heap(indexHeap.begin(), indexHeap.end(), compartator);
     }
 
     outputStream.close();
@@ -209,9 +222,17 @@ void Sorter::saveSortedChunk(const std::vector<size_t> &idx, const std::vector<S
         if(globalPosition > m_averageChunkOfChunkEnd && i != idx.size() - 1)
         {
             indexFile.write(reinterpret_cast<char*>(sortedLinesInfo.data()), sortedLinesInfo.size() * sizeof(LineInfo));
+
+            ofstream indexTextFile(genFilePath(m_cacheFolder, "textchunkIndex", chunkIndex) +  to_string(chunkOfChunksBound.size() - 1));
+            for(int j = 0; j < sortedLinesInfo.size(); j++)
+            {
+                indexTextFile << sortedLinesInfo[j].num << ' ' << sortedLinesInfo[j].start<< ' '  << sortedLinesInfo[j].strStart << ' ' << sortedLinesInfo[j].finis  << endl;
+            }
+            indexTextFile.close();
             sortedLinesInfo.clear();
+
             m_averageChunkOfChunkEnd += m_averageChunkOfChunkSize;
-            chunkOfChunksBound.push_back(ChunkOfChunkInfo{globalPosition, i, 0, 0});
+            chunkOfChunksBound.push_back(ChunkOfChunkInfo{globalPosition, i + 1, 0, 0});
         }
     }
     for(size_t i = 0; i < chunkOfChunksBound.size() - 1; i++)
@@ -223,6 +244,14 @@ void Sorter::saveSortedChunk(const std::vector<size_t> &idx, const std::vector<S
     chunkOfChunksBound.back().finisLineInfoIndex = idx.size();
     chunkFile.close();
     indexFile.write(reinterpret_cast<char*>(sortedLinesInfo.data()), sortedLinesInfo.size() * sizeof(LineInfo));
+    ofstream indexTextFile(genFilePath(m_cacheFolder, "textchunkIndex", chunkIndex) +  to_string(chunkOfChunksBound.size() - 1));
+
+    for(int j = 0; j < sortedLinesInfo.size(); j++)
+    {
+        indexTextFile << sortedLinesInfo[j].num << ' ' << sortedLinesInfo[j].start<< ' '  << sortedLinesInfo[j].strStart << ' ' << sortedLinesInfo[j].finis  << endl;
+    }
+    indexTextFile.close();
+
     indexFile.close();
 
 
