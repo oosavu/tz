@@ -119,41 +119,43 @@ std::vector<LineInfo> collectLineInfo(std::vector<char> &data)
 
 void merge(std::vector<std::pair<IterativeFile, IterativeFile> > &m_chunks, const string & m_outputFile)
 {
+   // std::vector<char*> currDatas(m_chunks.size());
+    std::vector<LineInfo*> currLineInfos(m_chunks.size());
     for(size_t i = 0; i < m_chunks.size(); i++)
     {
         if(!m_chunks[i].first.init())
             throw string("can't open file: ") + m_chunks[i].first.filePath;
         m_chunks[i].first.loadNextChunk();
+     //   currDatas[i] = (m_chunks[i].first.data.data());
+
         if(!m_chunks[i].second.init())
             throw string("can't open file: ") + m_chunks[i].second.filePath;
-        m_chunks[i].first.loadNextChunk();
+        m_chunks[i].second.loadNextChunk();
+        currLineInfos[i] = reinterpret_cast<LineInfo *>(m_chunks[i].second.data.data());
     }
 
     std::vector<size_t> currLineNum(m_chunks.size(), 0);
 
     auto compartator = [&](size_t l1, size_t l2) {
-//        const IterativeFile &chunk1 = m_chunks[l1].first;
-//        const IterativeFile &chunk2 = m_chunks[l2].first;
         const char* data1 = m_chunks[l1].first.data.data();
         const char* data2 = m_chunks[l2].first.data.data();
-        const LineInfo &lineInfol1 = chunk1.chunkIndexData[currLineNum[l1]];
-        const LineInfo &lineInfol2 = chunk2.chunkIndexData[currLineNum[l2]];
 
-        int cmp = customSTRCMP(&data1[lineInfol1.strStart - chunk1.byteGlobalOffset], &data2[lineInfol2.strStart - chunk2.byteGlobalOffset]);
+        int cmp = customSTRCMP(&data1[currLineInfos[l1]->strStart - m_chunks[l1].first.globalOffset], &data2[currLineInfos[l2]->strStart - m_chunks[l2].first.globalOffset]);
         if (cmp < 0)
             return true;
         else if (cmp > 0)
             return false;
         else
-            return lineInfol1.num > lineInfol2.num;
+            return currLineInfos[l1]->num > currLineInfos[l2]->num;
     };
 
     //std::vector<size_t> indexHeap(m_chunks.size());
     //iota(indexHeap.begin(), indexHeap.end(), 0);
     //make_heap(indexHeap.begin(), indexHeap.end(), compartator);
+
     priority_queue<size_t,  std::vector<size_t>, decltype(compartator)> q(compartator);
 
-    for (int i = 0; i < m_chunks.size(); i++)
+    for (size_t i = 0; i < m_chunks.size(); i++)
         q.push(i);
 
     ofstream outputStream(m_outputFile, ios::binary);
@@ -169,22 +171,24 @@ void merge(std::vector<std::pair<IterativeFile, IterativeFile> > &m_chunks, cons
 
         size_t poppedIndex = q.top();
         q.pop();
-        const LineInfo &lineInfo = m_chunks[poppedIndex].chunkIndexData.at(currLineNum[poppedIndex]);
+        //const LineInfo &lineInfo = m_chunks[poppedIndex].chunkIndexData.at(currLineNum[poppedIndex]);
 //        cout << poppedIndex << " " << currLineNum[poppedIndex] << " " << m_chunks[poppedIndex].chunkData.data()[lineInfo.start - m_chunks[poppedIndex].byteGlobalOffset]
 //             <<  m_chunks[poppedIndex].chunkData.data()[lineInfo.start - m_chunks[poppedIndex].byteGlobalOffset + 1]
 //              <<  m_chunks[poppedIndex].chunkData.data()[lineInfo.start - m_chunks[poppedIndex].byteGlobalOffset + 2] <<  endl;
 
-        outputStream.write(&m_chunks[poppedIndex].chunkData.data()[lineInfo.start - m_chunks[poppedIndex].byteGlobalOffset], lineInfo.finis - lineInfo.start);
+        outputStream.write(&m_chunks[poppedIndex].first.data.data()[currLineInfos[poppedIndex]->start - m_chunks[poppedIndex].first.globalOffset],
+                currLineInfos[poppedIndex]->finis - currLineInfos[poppedIndex]->start);
         outputStream.flush();
 
         currLineNum.at(poppedIndex) ++;
-        if(currLineNum[poppedIndex] >= m_chunks[poppedIndex].chunkIndexData.size())
+        currLineInfos.at(poppedIndex) ++;
+        if(currLineNum[poppedIndex] * sizeof(LineInfo) >= m_chunks[poppedIndex].second.data.size())
         {
+            bool isNext = m_chunks[poppedIndex].first.loadNextChunk() && m_chunks[poppedIndex].second.loadNextChunk();
             currLineNum[poppedIndex] = 0;
-            if(!m_chunks[poppedIndex].loadNextChunk())
-            {
+            currLineInfos[poppedIndex] = reinterpret_cast<LineInfo *>(m_chunks[poppedIndex].second.data.data());
+            if(!isNext)
                 continue;
-            }
                 //indexHeap.pop_back();
         }
         q.push(poppedIndex);
@@ -244,18 +248,6 @@ std::pair<IterativeFile, IterativeFile> saveSortedChunk(const std::vector<size_t
     indexFile.close();
 
     return {IterativeFile(chunkFilePath, dataChunks), IterativeFile(chunkIndexFilePath,indexChunks)};
-
-
-    //ofstream indexTextFile(genFilePath(m_cacheFolder, "textchunkIndex", chunkIndex) +  to_string(chunkOfChunksBound.size() - 1));
-
-
-//    cout << "chunkOfChunksBounds " << chunkIndex << ": ";
-//    for (ChunkOfChunkInfo &coc: chunkOfChunksBound)
-//        cout << "[" << coc.startByte << "-" << coc.finisByte << "] ";
-//    cout << endl;
-
-    //m_chunks.push_back(IterativeFile(chunkFilePath, chunkIndexFilePath, chunkOfChunksBound));
-    //return IterativeFileDeprecated(chunkFilePath, chunkIndexFilePath, chunkOfChunksBound);
 }
 
 
@@ -286,45 +278,6 @@ char customSTRCMP(const char *p1, const char *p2)
 }
 
 
-//IterativeFileDeprecated::IterativeFileDeprecated(const string &dataFilePath, const string &indexFilePath, const std::vector<ChunkOfChunkInfo> chunksInfo) :
-//    dataFilePath(dataFilePath),
-//    indexFilePath(indexFilePath),
-//    chunksInfo(chunksInfo)
-//{}
-
-//void IterativeFileDeprecated::init()
-//{
-//    dataFile.open(dataFilePath, ios::binary);
-//    if(!dataFile)
-//        throw string("can't open file: ") + dataFilePath;
-
-//    indexFile.open(indexFilePath, ios::binary);
-//    if(!indexFile)
-//        throw string("can't open file: ") + indexFilePath;
-//    indexOfChunk = -1;
-//}
-
-//bool IterativeFileDeprecated::loadNextChunk()
-//{
-//    indexOfChunk ++;
-//    if(indexOfChunk >= chunksInfo.size())
-//        return false;
-
-//    indexGlobalOffset = chunksInfo[indexOfChunk].startLineInfoIndex;
-//    byteGlobalOffset = chunksInfo[indexOfChunk].startByte;
-
-//    currChunkIndexSize = chunksInfo[indexOfChunk].finisLineInfoIndex - chunksInfo[indexOfChunk].startLineInfoIndex;
-//    currChunkSize = chunksInfo[indexOfChunk].finisByte - chunksInfo[indexOfChunk].startByte;
-
-//    chunkData.resize(currChunkSize);
-//    dataFile.read(chunkData.data(), chunkData.size());
-
-//    chunkIndexData.resize(currChunkIndexSize );
-//    indexFile.read(reinterpret_cast<char*>(chunkIndexData.data()), chunkIndexData.size() * sizeof(LineInfo));
-//    return true;
-//}
-
-
 IterativeFile::IterativeFile(const string &filePath, const ChunksVector &chunksInfo) :
     filePath(filePath),
     chunksInfo(chunksInfo)
@@ -336,7 +289,6 @@ bool IterativeFile::init()
     file.open(filePath, ios::binary);
     if(!file)
         return false;
-        //throw string("can't open file: ") + filePath;
     indexOfChunk = -1;
     return true;
 }

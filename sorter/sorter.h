@@ -39,7 +39,7 @@ struct IterativeFile{
     std::vector<char> data;
 
     //current index of chunksInfo
-    int indexOfChunk;
+    size_t indexOfChunk;
 
     //current position in current loaded chunk in terms of whole file
     size_t globalOffset;

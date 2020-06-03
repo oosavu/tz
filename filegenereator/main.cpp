@@ -12,9 +12,9 @@ struct Options
 {
     int64_t filesize{50000};
     std::string filepath{"/home/oosavu/asd.txt"};
-    int stringsCount{1000};
+    int stringsCount{2};
     int numsCount{100000};
-    int maxStrLen{1000};
+    int maxStrLen{50};
     int maxNum{200000};
     bool fullRandom{false};
 };
