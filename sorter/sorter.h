@@ -39,12 +39,13 @@ private:
         size_t finisLineInfoIndex;
     };
 
-    struct IterativeChunk{
+    struct IterativeFile{
         // input streams
         std::ifstream dataFile;
         std::ifstream indexFile;
         std::string dataFilePath;
         std::string indexFilePath;
+
         //info about file parts
         std::vector<ChunkOfChunkInfo> chunksInfo;
 
@@ -52,7 +53,7 @@ private:
         std::vector<char> chunkData;
         std::vector<LineInfo> chunkIndexData;
 
-        //currenc index in chunksInfo
+        //current index of chunksInfo
         int indexOfChunk;
 
         //current position in current loaded chunk in terms of whole file
@@ -61,17 +62,18 @@ private:
         size_t currChunkSize;
         size_t currChunkIndexSize;
 
-        IterativeChunk(const std::string &dataFilePath, const std::string &indexFilePath, const std::vector<ChunkOfChunkInfo> chunksInfo);
+        IterativeFile(const std::string &dataFilePath, const std::string &indexFilePath, const std::vector<ChunkOfChunkInfo> chunksInfo);
         void init();
         bool loadNextChunk();
     };
-    std::vector<IterativeChunk> m_chunks;
+
+    std::vector<IterativeFile> m_chunks;
 
     size_t m_averageChunkOfChunkSize;
 
     std::vector<size_t> findChunkBounds(std::ifstream &file, size_t averageChunkSize);
     std::vector<size_t> sortIndexes(const std::vector<LineInfo> &lineData, const std::vector<char> &data);
-    std::vector<LineInfo> collectChunkInfo(std::vector<char> &data);
+    std::vector<LineInfo> collectLineInfo(std::vector<char> &data);
 
     void merge();
 
