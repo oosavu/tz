@@ -3,71 +3,79 @@
 #include <iostream>
 #include <numeric>
 #include <queue>
-using namespace std;
 
-void Sorter::process()
+using namespace std;
+namespace sorter{
+
+void process(const std::string &m_cacheFolder, const std::string &m_inputFile, const std::string &m_outputFile, const int64_t m_averageChunkSize)
 {
-    ifstream file(m_inputFile, ios::binary);
-    if(!file)
+    ChunksVector chunkBounds = findChunkBounds(m_inputFile, m_averageChunkSize);
+
+    cout << "input file size:" << chunkBounds.back().second - chunkBounds.front().first << endl;
+
+    int64_t m_averageChunkOfChunkSize = m_averageChunkSize / (chunkBounds.size());
+
+    IterativeFile file(m_inputFile, chunkBounds);
+    if (!file.init())
         throw string("can't open file:") + m_inputFile;
 
-    vector<size_t> chunkBounds = findChunkBounds(file, m_averageChunkSize);
-    m_averageChunkOfChunkSize = m_averageChunkSize / (chunkBounds.size() - 1);
-
-    file.seekg (0, file.beg);
-    for(size_t chunkIndex = 0; chunkIndex < chunkBounds.size() - 1; chunkIndex++)
+    std::vector<IterativeFileDeprecated> m_chunks;
+    size_t chunkIndex = 0;
+    while(file.loadNextChunk())
     {
-        size_t chunkSize = chunkBounds[chunkIndex + 1] - chunkBounds[chunkIndex];
-        vector<char> data(chunkSize);
-        file.read(data.data(), data.size());
-        vector<LineInfo> lineData = collectLineInfo(data);
-        vector<size_t> idx = sortIndexes(lineData, data);
-        saveSortedChunk(idx, lineData, data, chunkIndex);
+        vector<LineInfo> lineData = collectLineInfo(file.data);
+        vector<size_t> idx = sortIndexes(lineData, file.data);
+        m_chunks.emplace_back(saveSortedChunk(idx, lineData, file.data, chunkIndex, m_cacheFolder, m_averageChunkOfChunkSize));
+        chunkIndex++;
     }
-    file.close();
-
-
-    merge();
+    merge(m_chunks, m_outputFile);
 }
 
-std::vector<size_t> Sorter::findChunkBounds(ifstream &file, size_t averageChunkSize)
+std::vector<std::pair<int64_t, int64_t>> findChunkBounds(const std::string &filePath, int64_t averageChunkSize)
 {
+    ifstream file(filePath, ios::binary);
+    if(!file)
+        throw string("can't open file:") + filePath;
+
     file.seekg(0, file.end);
-    size_t fileSize = file.tellg();
-    cout << "input file size:" << fileSize << endl;
+    int64_t fileSize = file.tellg();
 
-    vector<size_t> res;
-    res.push_back(0);
+    vector<size_t> keyPoints;
+    keyPoints.push_back(0);
 
-    size_t averageGlobalPos = 0;
+    int64_t averageGlobalPos = 0;
     while(true)
     {
         averageGlobalPos += averageChunkSize;
         if(averageGlobalPos >= fileSize)
         {
-            res.push_back(fileSize);
+            keyPoints.push_back(fileSize);
             break;
         }
         file.seekg(averageGlobalPos, file.beg);
         string line;
         getline(file, line); // move to the first '\n' charecter
 
-        res.push_back(file.tellg());
+        keyPoints.push_back(file.tellg());
 
         if(file.tellg() == fileSize) // it was the final line, so just break
             break;
     }
+    file.close();
 
     cout << "chunkBounds:";
-    for (size_t i : res)
+    for (size_t i : keyPoints)
         cout << i << " ";
     cout << endl;
 
+    std::vector<std::pair<int64_t, int64_t>> res;
+    for (size_t i = 0; i < keyPoints.size() - 1; i++)
+        res.push_back({keyPoints[i],keyPoints[i+1]});
     return res;
 
 }
 
-std::vector<size_t> Sorter::sortIndexes(const std::vector<Sorter::LineInfo> &lineData, const std::vector<char> &data)
+std::vector<size_t> sortIndexes(const std::vector<LineInfo> &lineData, const std::vector<char> &data)
 {
     vector<size_t> idx(lineData.size());
     iota(idx.begin(), idx.end(), 0);
@@ -82,11 +90,10 @@ std::vector<size_t> Sorter::sortIndexes(const std::vector<Sorter::LineInfo> &lin
         else
             return lineData[l1].num < lineData[l2].num;
     });
-
     return idx;
 }
 
-std::vector<Sorter::LineInfo> Sorter::collectLineInfo(std::vector<char> &data)
+std::vector<LineInfo> collectLineInfo(std::vector<char> &data)
 {
     vector<LineInfo> lines;
     auto i = data.begin(), end = data.end();
@@ -108,7 +115,7 @@ std::vector<Sorter::LineInfo> Sorter::collectLineInfo(std::vector<char> &data)
     return lines;
 }
 
-void Sorter::merge()
+void merge(std::vector<IterativeFileDeprecated> &m_chunks, const string & m_outputFile)
 {
     for(size_t i = 0; i < m_chunks.size(); i++)
     {
@@ -119,8 +126,8 @@ void Sorter::merge()
     std::vector<size_t> currLineNum(m_chunks.size(), 0);
 
     auto compartator = [&](size_t l1, size_t l2) {
-        const IterativeFile &chunk1 = m_chunks[l1];
-        const IterativeFile &chunk2 = m_chunks[l2];
+        const IterativeFileDeprecated &chunk1 = m_chunks[l1];
+        const IterativeFileDeprecated &chunk2 = m_chunks[l2];
         const char* data1 = chunk1.chunkData.data();
         const char* data2 = chunk2.chunkData.data();
         const LineInfo &lineInfol1 = chunk1.chunkIndexData[currLineNum[l1]];
@@ -181,7 +188,7 @@ void Sorter::merge()
     outputStream.close();
 }
 
-void Sorter::saveSortedChunk(const std::vector<size_t> &idx, const std::vector<Sorter::LineInfo> linesInfo, std::vector<char> &rawData, size_t chunkIndex)
+IterativeFileDeprecated saveSortedChunk(const std::vector<size_t> &idx, const std::vector<LineInfo> linesInfo, std::vector<char> &rawData, size_t chunkIndex, const string &m_cacheFolder, size_t m_averageChunkOfChunkSize)
 {
     string chunkFilePath = genFilePath(m_cacheFolder, "chunk", chunkIndex);
     ofstream chunkFile(chunkFilePath, ios::binary);
@@ -234,11 +241,12 @@ void Sorter::saveSortedChunk(const std::vector<size_t> &idx, const std::vector<S
 //        cout << "[" << coc.startByte << "-" << coc.finisByte << "] ";
 //    cout << endl;
 
-    m_chunks.push_back(IterativeFile(chunkFilePath, chunkIndexFilePath, chunkOfChunksBound));
+    //m_chunks.push_back(IterativeFile(chunkFilePath, chunkIndexFilePath, chunkOfChunksBound));
+    return IterativeFileDeprecated(chunkFilePath, chunkIndexFilePath, chunkOfChunksBound);
 }
 
 
-std::string Sorter::genFilePath(const string &folder, const string &name, int index)
+std::string genFilePath(const string &folder, const string &name, int index)
 {
     if(folder.empty())
         return name + to_string(index);
@@ -248,7 +256,7 @@ std::string Sorter::genFilePath(const string &folder, const string &name, int in
 
 //we need to stop strcmp after the \n (not \00)
 //copypaste from glibc/string/strcmp.c
-char Sorter::customSTRCMP(const char *p1, const char *p2)
+char customSTRCMP(const char *p1, const char *p2)
 {
     const unsigned char *s1 = (const unsigned char *) p1;
     const unsigned char *s2 = (const unsigned char *) p2;
@@ -265,13 +273,13 @@ char Sorter::customSTRCMP(const char *p1, const char *p2)
 }
 
 
-Sorter::IterativeFile::IterativeFile(const string &dataFilePath, const string &indexFilePath, const std::vector<Sorter::ChunkOfChunkInfo> chunksInfo) :
+IterativeFileDeprecated::IterativeFileDeprecated(const string &dataFilePath, const string &indexFilePath, const std::vector<ChunkOfChunkInfo> chunksInfo) :
     dataFilePath(dataFilePath),
     indexFilePath(indexFilePath),
     chunksInfo(chunksInfo)
 {}
 
-void Sorter::IterativeFile::init()
+void IterativeFileDeprecated::init()
 {
     dataFile.open(dataFilePath, ios::binary);
     if(!dataFile)
@@ -283,7 +291,7 @@ void Sorter::IterativeFile::init()
     indexOfChunk = -1;
 }
 
-bool Sorter::IterativeFile::loadNextChunk()
+bool IterativeFileDeprecated::loadNextChunk()
 {
     indexOfChunk ++;
     if(indexOfChunk >= chunksInfo.size())
@@ -303,3 +311,33 @@ bool Sorter::IterativeFile::loadNextChunk()
     return true;
 }
 
+
+IterativeFile::IterativeFile(const string &filePath, const ChunksVector &chunksInfo) :
+    filePath(filePath),
+    chunksInfo(chunksInfo)
+{
+}
+
+bool IterativeFile::init()
+{
+    file.open(filePath, ios::binary);
+    if(!file)
+        return false;
+        //throw string("can't open file: ") + filePath;
+    indexOfChunk = -1;
+    return true;
+}
+
+bool IterativeFile::loadNextChunk()
+{
+    indexOfChunk ++;
+    if(indexOfChunk >= chunksInfo.size())
+        return false;
+
+    globalOffset = chunksInfo[indexOfChunk].first;
+    currSize = chunksInfo[indexOfChunk].second - chunksInfo[indexOfChunk].first;
+    data.resize(currSize);
+    file.read(data.data(), data.size());
+    return true;
+}
+}

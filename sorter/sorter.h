@@ -6,82 +6,91 @@
 #include <fstream>
 #include <cstring>
 
-class Sorter
+namespace sorter
 {
-public:
-    Sorter(const std::string &cacheFolder, const std::string &inputFile, const std::string &outputFile, const uint64_t chunkSize) :
-        m_cacheFolder(cacheFolder),
-        m_inputFile(inputFile),
-        m_outputFile(outputFile),
-        m_averageChunkSize(chunkSize)
-    {}
 
-    void process();
+using ChunksVector = std::vector<std::pair<int64_t, int64_t>>;
 
-private:
-    std::string m_cacheFolder;
-    std::string m_inputFile;
-    std::string m_outputFile;
-    size_t m_averageChunkSize;
+void process(const std::string &cacheFolder, const std::string &inputFile, const std::string &outputFile, const int64_t chunkSize);
 
-    struct LineInfo{
-        size_t num; // cached Number
-        size_t start; // start byte in chunk
-        size_t strStart; // start str byte
-        size_t finis; // finis byte in chunk
-    };
+struct LineInfo{
+    size_t num; // cached Number
+    size_t start; // start byte in chunk
+    size_t strStart; // start str byte
+    size_t finis; // finis byte in chunk
+};
 
-    struct ChunkOfChunkInfo
-    {
-        size_t startByte;
-        size_t startLineInfoIndex;
-        size_t finisByte;
-        size_t finisLineInfoIndex;
-    };
+struct ChunkOfChunkInfo
+{
+    size_t startByte;
+    size_t startLineInfoIndex;
+    size_t finisByte;
+    size_t finisLineInfoIndex;
+};
 
-    struct IterativeFile{
-        // input streams
-        std::ifstream dataFile;
-        std::ifstream indexFile;
-        std::string dataFilePath;
-        std::string indexFilePath;
+struct IterativeFile{
+    // input streams
+    std::ifstream file;
+    std::string filePath;
+    //info about file parts
+    ChunksVector chunksInfo;
 
-        //info about file parts
-        std::vector<ChunkOfChunkInfo> chunksInfo;
+    //current data
+    std::vector<char> data;
 
-        //stored data and index
-        std::vector<char> chunkData;
-        std::vector<LineInfo> chunkIndexData;
+    //current index of chunksInfo
+    int indexOfChunk;
 
-        //current index of chunksInfo
-        int indexOfChunk;
+    //current position in current loaded chunk in terms of whole file
+    size_t globalOffset;
+    size_t currSize;
 
-        //current position in current loaded chunk in terms of whole file
-        size_t indexGlobalOffset;
-        size_t byteGlobalOffset;
-        size_t currChunkSize;
-        size_t currChunkIndexSize;
+    IterativeFile(const std::string &filePath, const ChunksVector &chunksInfo);
+    bool init();
+    bool loadNextChunk();
+};
 
-        IterativeFile(const std::string &dataFilePath, const std::string &indexFilePath, const std::vector<ChunkOfChunkInfo> chunksInfo);
-        void init();
-        bool loadNextChunk();
-    };
 
-    std::vector<IterativeFile> m_chunks;
+struct IterativeFileDeprecated{
+    // input streams
+    std::ifstream dataFile;
+    std::ifstream indexFile;
+    std::string dataFilePath;
+    std::string indexFilePath;
 
-    size_t m_averageChunkOfChunkSize;
+    //info about file parts
+    std::vector<ChunkOfChunkInfo> chunksInfo;
 
-    std::vector<size_t> findChunkBounds(std::ifstream &file, size_t averageChunkSize);
-    std::vector<size_t> sortIndexes(const std::vector<LineInfo> &lineData, const std::vector<char> &data);
-    std::vector<LineInfo> collectLineInfo(std::vector<char> &data);
+    //stored data and index
+    std::vector<char> chunkData;
+    std::vector<LineInfo> chunkIndexData;
 
-    void merge();
+    //current index of chunksInfo
+    int indexOfChunk;
 
-    // returns lineInfo for saved data
-    void saveSortedChunk(const std::vector<size_t> &idx, const std::vector<Sorter::LineInfo> linesInfo, std::vector<char> &rawData, size_t chunkIndex);
+    //current position in current loaded chunk in terms of whole file
+    size_t indexGlobalOffset;
+    size_t byteGlobalOffset;
+    size_t currChunkSize;
+    size_t currChunkIndexSize;
 
-    static std::string genFilePath(const std::string &folder, const std::string &name, int index);
-    static inline char customSTRCMP(const char *p1, const char *p2);
+    IterativeFileDeprecated(const std::string &dataFilePath, const std::string &indexFilePath, const std::vector<ChunkOfChunkInfo> chunksInfo);
+    void init();
+    bool loadNextChunk();
+};
+
+std::vector<std::pair<int64_t, int64_t>> findChunkBounds(const std::string &filePath, int64_t averageChunkSize);
+std::vector<size_t> sortIndexes(const std::vector<LineInfo> &lineData, const std::vector<char> &data);
+std::vector<LineInfo> collectLineInfo(std::vector<char> &data);
+
+void merge(std::vector<IterativeFileDeprecated> &m_chunks, const std::string &m_outputFile);
+
+// returns lineInfo for saved data
+IterativeFileDeprecated saveSortedChunk(const std::vector<size_t> &idx, const std::vector<LineInfo> linesInfo, std::vector<char> &rawData, size_t chunkIndex, const std::string &m_cacheFolder, size_t m_averageChunkOfChunkSize);
+
+std::string genFilePath(const std::string &folder, const std::string &name, int index);
+inline char customSTRCMP(const char *p1, const char *p2);
+
 };
 
 #endif // SORTER_H
