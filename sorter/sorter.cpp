@@ -119,19 +119,24 @@ std::vector<LineInfo> collectLineInfo(std::vector<char> &data)
 
 void merge(std::vector<std::pair<IterativeFile, IterativeFile> > &m_chunks, const string & m_outputFile)
 {
-   // std::vector<char*> currDatas(m_chunks.size());
+    //some cache variables for saving CPU time on vector indexing operations;
+    std::vector<char*> currDatas(m_chunks.size());
     std::vector<LineInfo*> currLineInfos(m_chunks.size());
+    std::vector<size_t> currLineInfoSizes(m_chunks.size());
+
+
     for(size_t i = 0; i < m_chunks.size(); i++)
     {
         if(!m_chunks[i].first.init())
             throw string("can't open file: ") + m_chunks[i].first.filePath;
         m_chunks[i].first.loadNextChunk();
-     //   currDatas[i] = (m_chunks[i].first.data.data());
+        currDatas[i] = (m_chunks[i].first.data.data());
 
         if(!m_chunks[i].second.init())
             throw string("can't open file: ") + m_chunks[i].second.filePath;
         m_chunks[i].second.loadNextChunk();
         currLineInfos[i] = reinterpret_cast<LineInfo *>(m_chunks[i].second.data.data());
+        currLineInfoSizes[i] = m_chunks[i].second.data.size() / sizeof(LineInfo);
     }
 
     std::vector<size_t> currLineNum(m_chunks.size(), 0);
