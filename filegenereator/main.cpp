@@ -11,7 +11,7 @@ using namespace std;
 struct Options
 {
     int64_t filesize{50000};
-    std::string filepath{"asd.txt"};
+    std::string filepath{"file.txt"};
     int stringsCount{10};
     int numsCount{1000};
     int maxStrLen{50};
@@ -75,18 +75,21 @@ int main(int argc, const char* argv[])
 
     std::chrono::system_clock::time_point startTime = std::chrono::system_clock::now();
 
+
+    int64_t bytesCount = 0; // file.getp wery slow!
+    int64_t linesCount = 0;
+
     //slow variant, no big memory cache usage
     if (opts.fullRandom)
     {
-        int64_t count = 0;
-        while (count < opts.filesize)
+        while (bytesCount < opts.filesize)
         {
             std::string num = engine.genNum();
             file.write(num.data(), num.size());
             std::string str = engine.genString();
             file.write(str.data(), str.size());
-            count += num.size() + str.size();
-
+            bytesCount += num.size() + str.size();
+            linesCount++;
         }
     }
     //fast variant. generate cache then combine it;
@@ -104,22 +107,23 @@ int main(int argc, const char* argv[])
         std::uniform_int_distribution<> numIndexDistributor(0, opts.numsCount - 1);
         std::uniform_int_distribution<> stringIndexDistributor(0, opts.stringsCount - 1);
 
-        int64_t count = 0; // file.getp wery slow!
-        while (count < opts.filesize)
+        while (bytesCount < opts.filesize)
         {
             int numIndex = numIndexDistributor(indexGenerator);
             file.write(numsCache[numIndex].data(), numsCache[numIndex].size());
             int stringIndex = stringIndexDistributor(indexGenerator);
             file.write(stringsCache[stringIndex].data(), stringsCache[stringIndex].size());
-            count += numsCache[numIndex].size() + stringsCache[stringIndex].size();
+            bytesCount += numsCache[numIndex].size() + stringsCache[stringIndex].size();
+            linesCount++;
         }
     }
 
     file.close();
     std::chrono::system_clock::time_point currentTime = std::chrono::system_clock::now();
-    int time = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count();
-    float bytesPerSecond = float(opts.filesize) / (float(time) / 1000.0);
-    cout << "FINISH. time:" << time << " msec. speed: " << int(bytesPerSecond)  << " bytes/sec" << endl;
+    auto time = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count();
+    float bytesPerSecond = float(bytesCount) / (float(time) / 1000.0f);
+    cout << "GENERATE FILE FINISH." << " file:" << opts.filepath << " size:" << bytesCount << " lines:" << linesCount <<
+            " time:" << time << " msec. speed: " << int(bytesPerSecond)  << " bytes/sec" << endl;
     return 0;
 }
 

@@ -11,11 +11,33 @@ namespace sorter{
 
 void sortBigFile(const std::string &cacheFolder, const std::string &inputFile, const std::string &outputFile, const int64_t averageChunkSize)
 {
-    std::chrono::system_clock::time_point startTime = std::chrono::system_clock::now();
+    TimeTracker tracker;
+    tracker.start();
+
     ChunksVector chunkBounds = findChunkBounds(inputFile, averageChunkSize);
 
     int64_t fileSize = chunkBounds.back().second - chunkBounds.front().first;
-    cout << "input file size:" << fileSize << endl;
+    cout << "input file size:" << fileSize << " chunks:" << chunkBounds.size() << endl;
+
+    // in case of little file just run index sort; TODO not create index file
+    if(chunkBounds.size() == 1)
+    {
+        cout << "file is small. use sort without chunks.." << endl;
+        IterativeFile file(inputFile, chunkBounds);
+        if (!file.init())
+            throw string("can't open file:") + inputFile;
+        file.loadNextChunk();
+
+        vector<LineInfo> lineData = collectLineInfo(file.data);
+        vector<size_t> idx = sortIndexes(lineData, file.data);
+        string chunkIndexFilePath = genFilePath(cacheFolder, "chunkIndex", 0);
+        (saveSortedChunk(idx, lineData, file.data, outputFile, chunkIndexFilePath, fileSize));
+
+        int time = tracker.elapsed();
+        float bytesPerSecond = float(fileSize) / max(float(max(time, 1) / 1000.0f), 0.001f);
+        cout << "FINISH. time:" << time << " msec. speed: " << int(bytesPerSecond)  << " bytes/sec" << endl;
+        return;
+    }
 
     int64_t averageChunkOfChunkSize = averageChunkSize / (chunkBounds.size());
 
@@ -29,14 +51,14 @@ void sortBigFile(const std::string &cacheFolder, const std::string &inputFile, c
     {
         vector<LineInfo> lineData = collectLineInfo(file.data);
         vector<size_t> idx = sortIndexes(lineData, file.data);
-        m_chunks.emplace_back(saveSortedChunk(idx, lineData, file.data, chunkIndex, cacheFolder, averageChunkOfChunkSize));
+        string chunkFilePath = genFilePath(cacheFolder, "chunk", chunkIndex);
+        string chunkIndexFilePath = genFilePath(cacheFolder, "chunkIndex", chunkIndex);
+        m_chunks.emplace_back(saveSortedChunk(idx, lineData, file.data, chunkFilePath, chunkIndexFilePath, averageChunkOfChunkSize));
         chunkIndex++;
     }
     file.close();
 
-    std::chrono::system_clock::time_point currentTime = std::chrono::system_clock::now();
-    int time = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count();
-    cout << "create chunks:" << time << endl;
+    cout << "create chunks time:" << tracker.elapsed() << endl;
 
     merge(m_chunks, outputFile);
 
@@ -46,9 +68,8 @@ void sortBigFile(const std::string &cacheFolder, const std::string &inputFile, c
         remove(filePair.second.filePath.c_str());
     }
 
-    currentTime = std::chrono::system_clock::now();
-    time = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count();
-    float bytesPerSecond = float(fileSize) / (float(time) / 1000.0);
+    int time = tracker.elapsed();
+    float bytesPerSecond = float(fileSize) / max(float(max(time, 1) / 1000.0f), 0.001f);
     cout << "FINISH. time:" << time << " msec. speed: " << int(bytesPerSecond)  << " bytes/sec" << endl;
 }
 
@@ -213,14 +234,12 @@ void merge(std::vector<std::pair<IterativeFile, IterativeFile> > &m_chunks, cons
     outputStream.close();
 }
 
-std::pair<IterativeFile, IterativeFile> saveSortedChunk(const std::vector<size_t> &idx, const std::vector<LineInfo> linesInfo, std::vector<char> &rawData, size_t chunkIndex, const string &m_cacheFolder, size_t m_averageChunkOfChunkSize)
+std::pair<IterativeFile, IterativeFile> saveSortedChunk(const std::vector<size_t> &idx, const std::vector<LineInfo> linesInfo, std::vector<char> &rawData, const string &chunkFilePath, const string &chunkIndexFilePath, size_t m_averageChunkOfChunkSize)
 {
-    string chunkFilePath = genFilePath(m_cacheFolder, "chunk", chunkIndex);
     ofstream chunkFile(chunkFilePath, ios::binary);
     if(!chunkFile)
         throw string("can't open file:") + chunkFilePath;
 
-    string chunkIndexFilePath = genFilePath(m_cacheFolder, "chunkIndex", chunkIndex);
     ofstream indexFile(chunkIndexFilePath, ios::binary);
     if(!indexFile)
         throw string("can't open file:") + chunkIndexFilePath;
@@ -327,4 +346,16 @@ void IterativeFile::close()
     data.clear();
     file.close();
 }
+
+void TimeTracker::start()
+{
+    startTime = std::chrono::system_clock::now();
+}
+
+int TimeTracker::elapsed()
+{
+    std::chrono::system_clock::time_point currentTime = std::chrono::system_clock::now();
+    return std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count();
+}
+
 }

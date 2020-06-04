@@ -4,9 +4,9 @@
 
 struct Options
 {
-    int64_t chunkSize{10000};
-    std::string inputFile{"asd.txt"};
-    std::string outputFile{"qwe.txt"};
+    int64_t chunkSize{1073741824};
+    std::string inputFile{"in.txt"};
+    std::string outputFile{"out.txt"};
     std::string cacheDir{""};
 };
 
