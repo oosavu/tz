@@ -5,7 +5,7 @@
 #include <fstream>
 #include <stdio.h>
 #include <chrono>
-#include "../cmdopts.h"
+#include "cmdopts.h"
 using namespace std;
 
 struct Options

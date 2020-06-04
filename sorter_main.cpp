@@ -1,7 +1,7 @@
 #include <iostream>
-#include "../cmdopts.h"
+#include "cmdopts.h"
 #include "sorter.h"
-
+#include <future>
 struct Options
 {
     int64_t chunkSize{1073741824};
@@ -9,6 +9,12 @@ struct Options
     std::string outputFile{"out.txt"};
     std::string cacheDir{""};
 };
+
+static std::string sorted(std::string s)
+{
+    sort(begin(s), end(s));
+    return s;
+}
 
 int main(int argc, const char* argv[])
 {
@@ -24,5 +30,7 @@ int main(int argc, const char* argv[])
         std::cerr << "ERROR:" << s << std::endl;
         return -1;
     }
+    auto hist (async(std::launch::async,
+     sorted, "qwe"));
     return 0;
 }
