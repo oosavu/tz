@@ -34,7 +34,7 @@ void sortBigFile(const std::string &cacheFolder, const std::string &inputFile, c
         (saveSortedChunk(idx, lineData, file.data, outputFile, chunkIndexFilePath, fileSize));
 
         int time = tracker.elapsed();
-        float bytesPerSecond = float(fileSize) / max(float(max(time, 1) / 1000.0f), 0.001f);
+        float bytesPerSecond = float(fileSize) / float(float(max(time, 1)) / 1000.0f);
         cout << "FINISH. time:" << time << " msec. speed: " << int(bytesPerSecond)  << " bytes/sec" << endl;
         return;
     }
@@ -69,7 +69,7 @@ void sortBigFile(const std::string &cacheFolder, const std::string &inputFile, c
     }
 
     int time = tracker.elapsed();
-    float bytesPerSecond = float(fileSize) / max(float(max(time, 1) / 1000.0f), 0.001f);
+    float bytesPerSecond = float(fileSize) / float(float(max(time, 1)) / 1000.0f);
     cout << "FINISH. time:" << time << " msec. speed: " << int(bytesPerSecond)  << " bytes/sec" << endl;
 }
 
