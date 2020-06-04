@@ -11,7 +11,7 @@ using namespace std;
 struct Options
 {
     int64_t filesize{50000};
-    std::string filepath{"/home/oosavu/asd.txt"};
+    std::string filepath{"asd.txt"};
     int stringsCount{2};
     int numsCount{100000};
     int maxStrLen{50};
@@ -99,7 +99,7 @@ int main(int argc, const char* argv[])
         for(int i = 0; i < opts.stringsCount; i++)
             stringsCache[i] = engine.genString();
 
-        //we need separate random generator for indexes
+        //we need separate random generator for cache indexes
         std::mt19937 indexGenerator(time(0));
         std::uniform_int_distribution<> numIndexDistributor(0, opts.numsCount - 1);
         std::uniform_int_distribution<> stringIndexDistributor(0, opts.stringsCount - 1);

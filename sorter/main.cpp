@@ -5,9 +5,9 @@
 struct Options
 {
     int64_t chunkSize{10000};
-    std::string inputFile{"/home/oosavu/asd.txt"};
-    std::string outputFile{"/home/oosavu/qwe.txt"};
-    std::string cacheDir{"/home/oosavu"};
+    std::string inputFile{"asd.txt"};
+    std::string outputFile{"qwe.txt"};
+    std::string cacheDir{""};
 };
 
 int main(int argc, const char* argv[])

@@ -123,6 +123,7 @@ void merge(std::vector<std::pair<IterativeFile, IterativeFile> > &m_chunks, cons
     std::vector<char*> currDatas(m_chunks.size());
     std::vector<LineInfo*> currLineInfos(m_chunks.size());
     std::vector<size_t> currLineInfoSizes(m_chunks.size());
+    std::vector<size_t> currLineNum(m_chunks.size(), 0);
 
 
     for(size_t i = 0; i < m_chunks.size(); i++)
@@ -130,7 +131,7 @@ void merge(std::vector<std::pair<IterativeFile, IterativeFile> > &m_chunks, cons
         if(!m_chunks[i].first.init())
             throw string("can't open file: ") + m_chunks[i].first.filePath;
         m_chunks[i].first.loadNextChunk();
-        currDatas[i] = (m_chunks[i].first.data.data());
+        currDatas[i] = m_chunks[i].first.data.data();
 
         if(!m_chunks[i].second.init())
             throw string("can't open file: ") + m_chunks[i].second.filePath;
@@ -139,13 +140,11 @@ void merge(std::vector<std::pair<IterativeFile, IterativeFile> > &m_chunks, cons
         currLineInfoSizes[i] = m_chunks[i].second.data.size() / sizeof(LineInfo);
     }
 
-    std::vector<size_t> currLineNum(m_chunks.size(), 0);
-
     auto compartator = [&](size_t l1, size_t l2) {
-        const char* data1 = m_chunks[l1].first.data.data();
-        const char* data2 = m_chunks[l2].first.data.data();
+        const char* data1 = currDatas[l1] + currLineInfos[l1]->strStart - currLineInfos[l1]->start;
+        const char* data2 = currDatas[l2] + currLineInfos[l2]->strStart - currLineInfos[l2]->start;
 
-        int cmp = customSTRCMP(&data1[currLineInfos[l1]->strStart - m_chunks[l1].first.globalOffset], &data2[currLineInfos[l2]->strStart - m_chunks[l2].first.globalOffset]);
+        int cmp = customSTRCMP(data1, data2);
         if (cmp < 0)
             return true;
         else if (cmp > 0)
@@ -181,17 +180,32 @@ void merge(std::vector<std::pair<IterativeFile, IterativeFile> > &m_chunks, cons
 //             <<  m_chunks[poppedIndex].chunkData.data()[lineInfo.start - m_chunks[poppedIndex].byteGlobalOffset + 1]
 //              <<  m_chunks[poppedIndex].chunkData.data()[lineInfo.start - m_chunks[poppedIndex].byteGlobalOffset + 2] <<  endl;
 
-        outputStream.write(&m_chunks[poppedIndex].first.data.data()[currLineInfos[poppedIndex]->start - m_chunks[poppedIndex].first.globalOffset],
+//        string pstr = to_string(poppedIndex) + " " + to_string(currLineInfos[poppedIndex]->finis - currLineInfos[poppedIndex]->strStart) + " ";
+//        outputStream.write(pstr.data(), pstr.size());
+
+        //outputStream.write(pstr.data(), pstr.size());
+        outputStream.write(currDatas[poppedIndex],
                 currLineInfos[poppedIndex]->finis - currLineInfos[poppedIndex]->start);
         outputStream.flush();
 
+//        outputStream.write(&m_chunks[poppedIndex].first.data.data()[currLineInfos[poppedIndex]->start - m_chunks[poppedIndex].first.globalOffset],
+ //               currLineInfos[poppedIndex]->finis - currLineInfos[poppedIndex]->start);
+  //      outputStream.flush();  [currLineInfos[poppedIndex]->start - m_chunks[poppedIndex].first.globalOffset]
+
+        currDatas.at(poppedIndex) += currLineInfos[poppedIndex]->finis - currLineInfos[poppedIndex]->start; //currLineInfos[poppedIndex]->start - m_chunks[poppedIndex].first.globalOffset;
         currLineNum.at(poppedIndex) ++;
         currLineInfos.at(poppedIndex) ++;
-        if(currLineNum[poppedIndex] * sizeof(LineInfo) >= m_chunks[poppedIndex].second.data.size())
+
+        //currDatas.at(poppedIndex) += ;
+        //if(currLineNum[poppedIndex] * sizeof(LineInfo) >= m_chunks[poppedIndex].second.data.size())
+
+        if(currLineNum[poppedIndex] >= currLineInfoSizes[poppedIndex])
         {
             bool isNext = m_chunks[poppedIndex].first.loadNextChunk() && m_chunks[poppedIndex].second.loadNextChunk();
-            currLineNum[poppedIndex] = 0;
-            currLineInfos[poppedIndex] = reinterpret_cast<LineInfo *>(m_chunks[poppedIndex].second.data.data());
+            currLineNum.at(poppedIndex) = 0;
+            currLineInfos.at(poppedIndex) = reinterpret_cast<LineInfo *>(m_chunks[poppedIndex].second.data.data());
+            currDatas.at(poppedIndex) = m_chunks[poppedIndex].first.data.data();
+            currLineInfoSizes.at(poppedIndex) = m_chunks[poppedIndex].second.data.size() / sizeof(LineInfo);
             if(!isNext)
                 continue;
                 //indexHeap.pop_back();
