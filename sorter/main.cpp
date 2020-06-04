@@ -19,7 +19,7 @@ int main(int argc, const char* argv[])
     auto opts = parser->parse(argc, argv);
 
     try {
-        sorter::process(opts.cacheDir, opts.inputFile, opts.outputFile, opts.chunkSize);
+        sorter::sortBigFile(opts.cacheDir, opts.inputFile, opts.outputFile, opts.chunkSize);
     } catch (std::string s) {
         std::cerr << "ERROR:" << s << std::endl;
         return -1;

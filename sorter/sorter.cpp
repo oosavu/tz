@@ -3,6 +3,7 @@
 #include <iostream>
 #include <numeric>
 #include <queue>
+#include <chrono>
 
 using namespace std;
 
@@ -10,9 +11,11 @@ namespace sorter{
 
 void sortBigFile(const std::string &cacheFolder, const std::string &inputFile, const std::string &outputFile, const int64_t averageChunkSize)
 {
+    std::chrono::system_clock::time_point startTime = std::chrono::system_clock::now();
     ChunksVector chunkBounds = findChunkBounds(inputFile, averageChunkSize);
 
-    cout << "input file size:" << chunkBounds.back().second - chunkBounds.front().first << endl;
+    int64_t fileSize = chunkBounds.back().second - chunkBounds.front().first;
+    cout << "input file size:" << fileSize << endl;
 
     int64_t averageChunkOfChunkSize = averageChunkSize / (chunkBounds.size());
 
@@ -30,7 +33,23 @@ void sortBigFile(const std::string &cacheFolder, const std::string &inputFile, c
         chunkIndex++;
     }
     file.close();
+
+    std::chrono::system_clock::time_point currentTime = std::chrono::system_clock::now();
+    int time = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count();
+    cout << "create chunks:" << time << endl;
+
     merge(m_chunks, outputFile);
+
+    for(auto &filePair : m_chunks)
+    {
+        remove(filePair.first.filePath.c_str());
+        remove(filePair.second.filePath.c_str());
+    }
+
+    currentTime = std::chrono::system_clock::now();
+    time = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count();
+    float bytesPerSecond = float(fileSize) / (float(time) / 1000.0);
+    cout << "FINISH. time:" << time << " msec. speed: " << int(bytesPerSecond)  << " bytes/sec" << endl;
 }
 
 std::vector<std::pair<int64_t, int64_t>> findChunkBounds(const std::string &filePath, int64_t averageChunkSize)
@@ -65,10 +84,10 @@ std::vector<std::pair<int64_t, int64_t>> findChunkBounds(const std::string &file
     }
     file.close();
 
-    cout << "chunkBounds:";
-    for (size_t i : keyPoints)
-        cout << i << " ";
-    cout << endl;
+//    cout << "chunkBounds:";
+//    for (size_t i : keyPoints)
+//        cout << i << " ";
+//    cout << endl;
 
     std::vector<std::pair<int64_t, int64_t>> res;
     for (size_t i = 0; i < keyPoints.size() - 1; i++)
