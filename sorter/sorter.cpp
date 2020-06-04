@@ -8,17 +8,17 @@ using namespace std;
 
 namespace sorter{
 
-void process(const std::string &m_cacheFolder, const std::string &m_inputFile, const std::string &m_outputFile, const int64_t m_averageChunkSize)
+void sortBigFile(const std::string &cacheFolder, const std::string &inputFile, const std::string &outputFile, const int64_t averageChunkSize)
 {
-    ChunksVector chunkBounds = findChunkBounds(m_inputFile, m_averageChunkSize);
+    ChunksVector chunkBounds = findChunkBounds(inputFile, averageChunkSize);
 
     cout << "input file size:" << chunkBounds.back().second - chunkBounds.front().first << endl;
 
-    int64_t m_averageChunkOfChunkSize = m_averageChunkSize / (chunkBounds.size());
+    int64_t averageChunkOfChunkSize = averageChunkSize / (chunkBounds.size());
 
-    IterativeFile file(m_inputFile, chunkBounds);
+    IterativeFile file(inputFile, chunkBounds);
     if (!file.init())
-        throw string("can't open file:") + m_inputFile;
+        throw string("can't open file:") + inputFile;
 
     std::vector<std::pair<IterativeFile, IterativeFile>> m_chunks;
     size_t chunkIndex = 0;
@@ -26,11 +26,11 @@ void process(const std::string &m_cacheFolder, const std::string &m_inputFile, c
     {
         vector<LineInfo> lineData = collectLineInfo(file.data);
         vector<size_t> idx = sortIndexes(lineData, file.data);
-        m_chunks.emplace_back(saveSortedChunk(idx, lineData, file.data, chunkIndex, m_cacheFolder, m_averageChunkOfChunkSize));
+        m_chunks.emplace_back(saveSortedChunk(idx, lineData, file.data, chunkIndex, cacheFolder, averageChunkOfChunkSize));
         chunkIndex++;
     }
     file.close();
-    merge(m_chunks, m_outputFile);
+    merge(m_chunks, outputFile);
 }
 
 std::vector<std::pair<int64_t, int64_t>> findChunkBounds(const std::string &filePath, int64_t averageChunkSize)
@@ -95,6 +95,7 @@ std::vector<size_t> sortIndexes(const std::vector<LineInfo> &lineData, const std
     return idx;
 }
 
+// collect info about lines in format: "NUMBER: STRING\n"
 std::vector<LineInfo> collectLineInfo(std::vector<char> &data)
 {
     vector<LineInfo> lines;
@@ -125,7 +126,6 @@ void merge(std::vector<std::pair<IterativeFile, IterativeFile> > &m_chunks, cons
     std::vector<size_t> currLineInfoSizes(m_chunks.size());
     std::vector<size_t> currLineNum(m_chunks.size(), 0);
 
-
     for(size_t i = 0; i < m_chunks.size(); i++)
     {
         if(!m_chunks[i].first.init())
@@ -145,17 +145,13 @@ void merge(std::vector<std::pair<IterativeFile, IterativeFile> > &m_chunks, cons
         const char* data2 = currDatas[l2] + currLineInfos[l2]->strStart - currLineInfos[l2]->start;
 
         int cmp = customSTRCMP(data1, data2);
-        if (cmp < 0)
+        if (cmp > 0)
             return true;
-        else if (cmp > 0)
+        else if (cmp < 0)
             return false;
         else
             return currLineInfos[l1]->num > currLineInfos[l2]->num;
     };
-
-    //std::vector<size_t> indexHeap(m_chunks.size());
-    //iota(indexHeap.begin(), indexHeap.end(), 0);
-    //make_heap(indexHeap.begin(), indexHeap.end(), compartator);
 
     priority_queue<size_t,  std::vector<size_t>, decltype(compartator)> q(compartator);
 
@@ -168,36 +164,19 @@ void merge(std::vector<std::pair<IterativeFile, IterativeFile> > &m_chunks, cons
 
     while(!q.empty())
     {
-        //push_heap(indexHeap.begin(), indexHeap.end());
-
-        //auto maxEl = max_element(indexHeap.begin(), indexHeap.end(), compartator);
-        //int poppedIndex = std::distance(indexHeap.begin(), maxEl);
 
         size_t poppedIndex = q.top();
         q.pop();
-        //const LineInfo &lineInfo = m_chunks[poppedIndex].chunkIndexData.at(currLineNum[poppedIndex]);
-//        cout << poppedIndex << " " << currLineNum[poppedIndex] << " " << m_chunks[poppedIndex].chunkData.data()[lineInfo.start - m_chunks[poppedIndex].byteGlobalOffset]
-//             <<  m_chunks[poppedIndex].chunkData.data()[lineInfo.start - m_chunks[poppedIndex].byteGlobalOffset + 1]
-//              <<  m_chunks[poppedIndex].chunkData.data()[lineInfo.start - m_chunks[poppedIndex].byteGlobalOffset + 2] <<  endl;
 
 //        string pstr = to_string(poppedIndex) + " " + to_string(currLineInfos[poppedIndex]->finis - currLineInfos[poppedIndex]->strStart) + " ";
 //        outputStream.write(pstr.data(), pstr.size());
 
-        //outputStream.write(pstr.data(), pstr.size());
         outputStream.write(currDatas[poppedIndex],
                 currLineInfos[poppedIndex]->finis - currLineInfos[poppedIndex]->start);
-        outputStream.flush();
-
-//        outputStream.write(&m_chunks[poppedIndex].first.data.data()[currLineInfos[poppedIndex]->start - m_chunks[poppedIndex].first.globalOffset],
- //               currLineInfos[poppedIndex]->finis - currLineInfos[poppedIndex]->start);
-  //      outputStream.flush();  [currLineInfos[poppedIndex]->start - m_chunks[poppedIndex].first.globalOffset]
 
         currDatas.at(poppedIndex) += currLineInfos[poppedIndex]->finis - currLineInfos[poppedIndex]->start; //currLineInfos[poppedIndex]->start - m_chunks[poppedIndex].first.globalOffset;
         currLineNum.at(poppedIndex) ++;
         currLineInfos.at(poppedIndex) ++;
-
-        //currDatas.at(poppedIndex) += ;
-        //if(currLineNum[poppedIndex] * sizeof(LineInfo) >= m_chunks[poppedIndex].second.data.size())
 
         if(currLineNum[poppedIndex] >= currLineInfoSizes[poppedIndex])
         {
@@ -208,10 +187,8 @@ void merge(std::vector<std::pair<IterativeFile, IterativeFile> > &m_chunks, cons
             currLineInfoSizes.at(poppedIndex) = m_chunks[poppedIndex].second.data.size() / sizeof(LineInfo);
             if(!isNext)
                 continue;
-                //indexHeap.pop_back();
         }
         q.push(poppedIndex);
-      //  push_heap(indexHeap.begin(), indexHeap.end(), compartator);
     }
 
     outputStream.close();
@@ -274,7 +251,7 @@ std::string genFilePath(const string &folder, const string &name, int index)
 {
     if(folder.empty())
         return name + to_string(index);
-    return folder + "/" + name + to_string(index); //todo win support.
+    return folder + "\\" + name + to_string(index);
 }
 
 
@@ -321,7 +298,8 @@ bool IterativeFile::loadNextChunk()
     globalOffset = chunksInfo[indexOfChunk].first;
     currSize = chunksInfo[indexOfChunk].second - chunksInfo[indexOfChunk].first;
     data.resize(currSize);
-    file.read(data.data(), data.size());
+    if(!file.read(data.data(), data.size()))
+        throw string("read error:") + filePath;
     return true;
 }
 

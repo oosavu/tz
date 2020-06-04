@@ -11,7 +11,7 @@ namespace sorter
 
 using ChunksVector = std::vector<std::pair<int64_t, int64_t>>;
 
-void process(const std::string &cacheFolder, const std::string &inputFile, const std::string &outputFile, const int64_t chunkSize);
+void sortBigFile(const std::string &cacheFolder, const std::string &inputFile, const std::string &outputFile, const int64_t chunkSize);
 
 struct LineInfo{
     size_t num; // cached Number
@@ -19,14 +19,6 @@ struct LineInfo{
     size_t strStart; // start str byte
     size_t finis; // finis byte in chunk
 };
-
-//struct ChunkOfChunkInfo
-//{
-//    size_t startByte;
-//    size_t startLineInfoIndex;
-//    size_t finisByte;
-//    size_t finisLineInfoIndex;
-//};
 
 struct IterativeFile{
     // input streams
@@ -50,35 +42,6 @@ struct IterativeFile{
     bool loadNextChunk();
     void close();
 };
-
-
-//struct IterativeFileDeprecated{
-//    // input streams
-//    std::ifstream dataFile;
-//    std::ifstream indexFile;
-//    std::string dataFilePath;
-//    std::string indexFilePath;
-
-//    //info about file parts
-//    std::vector<ChunkOfChunkInfo> chunksInfo;
-
-//    //stored data and index
-//    std::vector<char> chunkData;
-//    std::vector<LineInfo> chunkIndexData;
-
-//    //current index of chunksInfo
-//    int indexOfChunk;
-
-//    //current position in current loaded chunk in terms of whole file
-//    size_t indexGlobalOffset;
-//    size_t byteGlobalOffset;
-//    size_t currChunkSize;
-//    size_t currChunkIndexSize;
-
-//    IterativeFileDeprecated(const std::string &dataFilePath, const std::string &indexFilePath, const std::vector<ChunkOfChunkInfo> chunksInfo);
-//    void init();
-//    bool loadNextChunk();
-//};
 
 std::vector<std::pair<int64_t, int64_t>> findChunkBounds(const std::string &filePath, int64_t averageChunkSize);
 std::vector<size_t> sortIndexes(const std::vector<LineInfo> &lineData, const std::vector<char> &data);
