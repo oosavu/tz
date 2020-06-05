@@ -4,6 +4,7 @@
 #include <numeric>
 #include <queue>
 #include <chrono>
+#include <execution>
 
 using namespace std;
 
@@ -122,7 +123,7 @@ std::vector<size_t> sortIndexes(const std::vector<LineInfo> &lineData, const std
     vector<size_t> idx(lineData.size());
     iota(idx.begin(), idx.end(), 0);
     const char* rawData = data.data();
-    sort(idx.begin(), idx.end(),
+    sort(execution::par,idx.begin(), idx.end(),
          [&](size_t l1, size_t l2) {
         int cmp = customSTRCMP(&rawData[lineData[l1].strStart], &rawData[lineData[l2].strStart]);
         if (cmp < 0)

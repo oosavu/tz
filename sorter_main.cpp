@@ -10,12 +10,6 @@ struct Options
     std::string cacheDir{""};
 };
 
-static std::string sorted(std::string s)
-{
-    sort(begin(s), end(s));
-    return s;
-}
-
 int main(int argc, const char* argv[])
 {
     auto parser = CmdOpts<Options>::Create({{"--chunkSize", &Options::chunkSize },
@@ -30,7 +24,5 @@ int main(int argc, const char* argv[])
         std::cerr << "ERROR:" << s << std::endl;
         return -1;
     }
-    auto hist (async(std::launch::async,
-     sorted, "qwe"));
     return 0;
 }
