@@ -12,7 +12,7 @@ using namespace std;
 
 struct Options
 {
-    int64_t filesize{50000};
+    int64_t filesize{10000000000};
     std::string filepath{"file.txt"};
     int stringsCount{10};
     int numsCount{1000};
@@ -67,40 +67,19 @@ int main(int argc, const char* argv[])
 
     auto opts = parser->parse(argc, argv);
 
-  //  string asd;
-    //asd.reserve(123123);
-    //ostringstream  qwe;
-    //stringbuf* asd = qwe.rdbuf();
-
-    AsyncStreamBuf buf(opts.filepath);
-    ostream qwe(&buf);
-    qwe.write("asdf", 4);
-    qwe.write("asdf", 4);
-    qwe << "qwe";
-    qwe.flush();
-    return 0;
-
-
-
-
-//    std::ofstream file(opts.filepath, ios::binary);
-//    if(!file)
-//    {
-//        cerr << "ERROR: can't open file:" << opts.filepath;
-//        return -1;
-//    }
+    AsyncOstream stream(opts.filepath, 100000000); // ~100mb internal chunks buff
+    if(!stream.isValid())
+    {
+        cerr << "ERROR: can't open file:" << opts.filepath;
+        return -1;
+    }
 
     GeneratorEngine engine(opts);
 
     std::chrono::system_clock::time_point startTime = std::chrono::system_clock::now();
 
-    int64_t bytesCount = 0; // file.getp wery slow!
+    int64_t bytesCount = 0;
     int64_t linesCount = 0;
-
-    AsyncFileWriter writer(opts.filepath);
-    std::vector<char> chunk;
-    chunk.resize(1000);
-
 
     //slow variant, no big memory cache usage
     if (opts.fullRandom)
@@ -110,9 +89,9 @@ int main(int argc, const char* argv[])
             std::string num = engine.genNum();
             std::string str = engine.genString();
             bytesCount += num.size() + str.size();
+            stream << num << str;
 
-
-           // astream << num <<str;
+            // astream << num <<str;
             linesCount++;
         }
     }
@@ -135,15 +114,13 @@ int main(int argc, const char* argv[])
         {
             int numIndex = numIndexDistributor(indexGenerator);
             int stringIndex = stringIndexDistributor(indexGenerator);
-          //  astream << numsCache[numIndex] << stringsCache[stringIndex];
-//            file.write(numsCache[numIndex].data(), numsCache[numIndex].size());
-//            file.write(stringsCache[stringIndex].data(), stringsCache[stringIndex].size());
+            stream << numsCache[numIndex] << stringsCache[stringIndex];
             bytesCount += numsCache[numIndex].size() + stringsCache[stringIndex].size();
             linesCount++;
         }
     }
+    stream.flush();
 
-//    file.close();
     std::chrono::system_clock::time_point currentTime = std::chrono::system_clock::now();
     auto time = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count();
     float bytesPerSecond = float(bytesCount) / (float(time) / 1000.0f);
