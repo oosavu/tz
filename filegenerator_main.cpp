@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <chrono>
 #include "cmdopts.h"
+#include "asyncfile.h"
+
 using namespace std;
 
 struct Options
@@ -65,19 +67,40 @@ int main(int argc, const char* argv[])
 
     auto opts = parser->parse(argc, argv);
 
-    std::ofstream file(opts.filepath, ios::binary);
-    if(!file)
-    {
-        cerr << "ERROR: can't open file:" << opts.filepath;
-        return -1;
-    }
+  //  string asd;
+    //asd.reserve(123123);
+    //ostringstream  qwe;
+    //stringbuf* asd = qwe.rdbuf();
+
+    AsyncStreamBuf buf(opts.filepath);
+    ostream qwe(&buf);
+    qwe.write("asdf", 4);
+    qwe.write("asdf", 4);
+    qwe << "qwe";
+    qwe.flush();
+    return 0;
+
+
+
+
+//    std::ofstream file(opts.filepath, ios::binary);
+//    if(!file)
+//    {
+//        cerr << "ERROR: can't open file:" << opts.filepath;
+//        return -1;
+//    }
+
     GeneratorEngine engine(opts);
 
     std::chrono::system_clock::time_point startTime = std::chrono::system_clock::now();
 
-
     int64_t bytesCount = 0; // file.getp wery slow!
     int64_t linesCount = 0;
+
+    AsyncFileWriter writer(opts.filepath);
+    std::vector<char> chunk;
+    chunk.resize(1000);
+
 
     //slow variant, no big memory cache usage
     if (opts.fullRandom)
@@ -85,10 +108,11 @@ int main(int argc, const char* argv[])
         while (bytesCount < opts.filesize)
         {
             std::string num = engine.genNum();
-            file.write(num.data(), num.size());
             std::string str = engine.genString();
-            file.write(str.data(), str.size());
             bytesCount += num.size() + str.size();
+
+
+           // astream << num <<str;
             linesCount++;
         }
     }
@@ -110,15 +134,16 @@ int main(int argc, const char* argv[])
         while (bytesCount < opts.filesize)
         {
             int numIndex = numIndexDistributor(indexGenerator);
-            file.write(numsCache[numIndex].data(), numsCache[numIndex].size());
             int stringIndex = stringIndexDistributor(indexGenerator);
-            file.write(stringsCache[stringIndex].data(), stringsCache[stringIndex].size());
+          //  astream << numsCache[numIndex] << stringsCache[stringIndex];
+//            file.write(numsCache[numIndex].data(), numsCache[numIndex].size());
+//            file.write(stringsCache[stringIndex].data(), stringsCache[stringIndex].size());
             bytesCount += numsCache[numIndex].size() + stringsCache[stringIndex].size();
             linesCount++;
         }
     }
 
-    file.close();
+//    file.close();
     std::chrono::system_clock::time_point currentTime = std::chrono::system_clock::now();
     auto time = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count();
     float bytesPerSecond = float(bytesCount) / (float(time) / 1000.0f);
