@@ -13,6 +13,7 @@
 #include <sstream>
 #include <utility>
 
+
 class AsyncOStreamBuf : public std::streambuf
 {
 public:

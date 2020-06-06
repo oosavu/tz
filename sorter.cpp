@@ -7,9 +7,9 @@
 #include <execution>
 #include <future>
 #include "asyncfile.h"
-#include <mutex>
-#include <condition_variable>
+
 using namespace std;
+
 namespace sorter{
 
 vector<IterativeFile> asyncChunkSort(const string &inputFile, const ChunksVector &chunkBounds, const string &cacheFolder, const int64_t averageChunkSize)
@@ -19,8 +19,10 @@ vector<IterativeFile> asyncChunkSort(const string &inputFile, const ChunksVector
     mutex fileSystemMutex;
 
     auto sortFunctor = [&](int indexOfChunk) -> pair<string, ChunksVector>{
-        cout << "start sort " << indexOfChunk << endl;
+        std::string debugID = to_string(indexOfChunk) + "[" + to_string(chunkBounds[indexOfChunk].first) + "-" + to_string(chunkBounds[indexOfChunk].second) + "]";
+
         taskCounter.wait();
+        SafeCout{} << "wake up thread for " << debugID << endl;
         int64_t globalOffset = chunkBounds[indexOfChunk].first;
         int64_t currSize = chunkBounds[indexOfChunk].second - chunkBounds[indexOfChunk].first;
 
@@ -28,7 +30,7 @@ vector<IterativeFile> asyncChunkSort(const string &inputFile, const ChunksVector
         vector<LineInfo> lineData;
         {
             unique_lock<mutex> locker(fileSystemMutex);
-            cout << "start read part " << indexOfChunk << endl;
+            SafeCout{} << "start read part " << debugID << endl;
             ifstream file(inputFile, ios::binary);
             if (!file)
                 throw string("can't open file:") + inputFile;
@@ -38,18 +40,18 @@ vector<IterativeFile> asyncChunkSort(const string &inputFile, const ChunksVector
                 throw string("read error:") + inputFile;
             file.close();
         }
-        cout << "start sort " << indexOfChunk << endl;
+        SafeCout{} << "start sort " << indexOfChunk << endl;
         lineData = collectLineInfo(data);
         vector<size_t> idx = sortIndexes(lineData, data);
         ChunksVector bounds;
         string chunkFilePath = genFilePath(cacheFolder, "chunk", indexOfChunk);
         {
             unique_lock<mutex> locker(fileSystemMutex);
-            cout << "start save " << indexOfChunk << endl;
+            SafeCout{} << "start save " << debugID << endl;
             bounds = saveSortedChunk(idx, lineData, data, chunkFilePath, averageChunkOfChunkSize);
         }
         taskCounter.notify();
-        cout << "finis " << indexOfChunk << endl;
+        SafeCout{} << "finis " << debugID << endl;
         return {chunkFilePath, bounds};
     };
     vector<future<pair<string, ChunksVector>>> results;
@@ -85,11 +87,11 @@ void sortBigFile(const string &cacheFolder, const string &inputFile, const strin
     }
 
     vector<IterativeFile> chunkFiles = asyncChunkSort(inputFile, chunkBounds, cacheFolder, averageChunkSize);
-    merge(chunkFiles, outputFile);
-
     cout << "create chunks time:" << tracker.elapsed() << endl;
 
-    //merge(m_chunks, outputFile);
+
+    merge(chunkFiles, outputFile);
+
 
     for(auto &filePair : chunkFiles)
         remove(filePair.filePath().c_str());
@@ -102,7 +104,7 @@ void sortBigFile(const string &cacheFolder, const string &inputFile, const strin
 
 }
 
-vector<pair<int64_t, int64_t>> findChunkBounds(const string &filePath, int64_t averageChunkSize)
+ChunksVector findChunkBounds(const string &filePath, int64_t averageChunkSize)
 {
     ifstream file(filePath, ios::binary);
     if(!file)
@@ -139,7 +141,7 @@ vector<pair<int64_t, int64_t>> findChunkBounds(const string &filePath, int64_t a
     //        cout << i << " ";
     //    cout << endl;
 
-    vector<pair<int64_t, int64_t>> res;
+    ChunksVector res;
     for (size_t i = 0; i < keyPoints.size() - 1; i++)
         res.push_back({keyPoints[i],keyPoints[i+1]});
     return res;
@@ -231,6 +233,7 @@ void merge(vector<IterativeFile> &iterativeChunks, const string & outputFile)
         size_t poppedIndex = q.top();
         q.pop();
 
+        // uncomment for debug..
         //        string pstr = to_string(poppedIndex) + " " + to_string(currLineInfos[poppedIndex]->finis - currLineInfos[poppedIndex]->strStart) + " ";
         //        outputStream.write(pstr.data(), pstr.size());
 
@@ -275,7 +278,7 @@ char customSTRCMP(const char *p1, const char *p2)
     {
         c1 = (unsigned char) *s1++;
         c2 = (unsigned char) *s2++;
-        if (c1 == '\n') // '\0'
+        if (c1 == '\n') // '\n' insted of '\0'!!!
             return c1 - c2;
     }
     while (c1 == c2);
@@ -304,8 +307,6 @@ bool IterativeFile::loadNextChunk()
     if(m_indexOfChunk >= m_chunksInfo.size())
         return false;
 
-    //globalOffset = chunksInfo[indexOfChunk].first;
-    //currSize = ;
     data.resize(m_chunksInfo[m_indexOfChunk].second - m_chunksInfo[m_indexOfChunk].first);
     if(!m_file.read(data.data(), data.size()))
         throw string("read error:") + m_filePath;
@@ -316,6 +317,11 @@ void IterativeFile::close()
 {
     data.clear();
     m_file.close();
+}
+
+const std::string IterativeFile::filePath()
+{
+    return m_filePath;
 }
 
 void TimeTracker::start()
@@ -329,7 +335,7 @@ int TimeTracker::elapsed()
     return chrono::duration_cast<chrono::milliseconds>(currentTime - startTime).count();
 }
 
-ChunksVector saveSortedChunk(const vector<size_t> &idx, const vector<LineInfo> &linesInfo, vector<char> &rawData, const string &chunkFilePath, size_t m_averageChunkOfChunkSize)
+ChunksVector saveSortedChunk(const vector<size_t> &idx, const vector<LineInfo> &linesInfo, vector<char> &rawData, const string &chunkFilePath, size_t averageChunkOfChunkSize)
 {
     AsyncOstream stream(chunkFilePath);
     if(!stream.isValid())
@@ -337,7 +343,7 @@ ChunksVector saveSortedChunk(const vector<size_t> &idx, const vector<LineInfo> &
 
     vector<int64_t> dataKeypoints{0};
 
-    size_t averageChunkOfChunkEnd = m_averageChunkOfChunkSize;
+    size_t averageChunkOfChunkEnd = averageChunkOfChunkSize;
     size_t globalPosition = 0;
     for(size_t i = 0; i < idx.size(); i++)
     {
@@ -348,7 +354,7 @@ ChunksVector saveSortedChunk(const vector<size_t> &idx, const vector<LineInfo> &
         globalPosition += lineSize;
         if(globalPosition > averageChunkOfChunkEnd && i != idx.size() - 1)
         {
-            averageChunkOfChunkEnd += m_averageChunkOfChunkSize;
+            averageChunkOfChunkEnd += averageChunkOfChunkSize;
             dataKeypoints.push_back(globalPosition);
         }
     }
@@ -376,186 +382,10 @@ void Semaphore::wait() {
     --m_count;
 }
 
+SafeCout::~SafeCout() {
+    std::lock_guard<std::mutex> locker(m_mutex);
+    std::cout << rdbuf();
+    std::cout.flush();
+}
 
-
-//pair<IterativeFile, IterativeFile> saveSortedChunk(const vector<size_t> &idx, const vector<LineInfo> linesInfo, vector<char> &rawData, const string &chunkFilePath, const string &chunkIndexFilePath, size_t m_averageChunkOfChunkSize)
-//{
-//    ofstream chunkFile(chunkFilePath, ios::binary);
-//    if(!chunkFile)
-//        throw string("can't open file:") + chunkFilePath;
-
-//    ofstream indexFile(chunkIndexFilePath, ios::binary);
-//    if(!indexFile)
-//        throw string("can't open file:") + chunkIndexFilePath;
-
-
-//    vector<int64_t> dataKeypoints{0};
-//    vector<int64_t> indexKeypoints{0};
-
-//    size_t averageChunkOfChunkEnd = m_averageChunkOfChunkSize;
-//    vector<LineInfo> sortedLinesInfo;
-//    size_t globalPosition = 0;
-//    for(size_t i = 0; i < idx.size(); i++)
-//    {
-//        size_t idx_i = idx[i];
-//        const LineInfo& lineInfo = linesInfo.at(idx_i);
-//        size_t lineSize = lineInfo.finis - lineInfo.start;
-//        chunkFile.write(&rawData.data()[lineInfo.start], lineSize);
-//        sortedLinesInfo.emplace_back(LineInfo{lineInfo.num, globalPosition, globalPosition + lineInfo.strStart - lineInfo.start, globalPosition + lineSize});
-//        globalPosition += lineSize;
-//        if(globalPosition > averageChunkOfChunkEnd && i != idx.size() - 1)
-//        {
-//            indexFile.write(reinterpret_cast<char*>(sortedLinesInfo.data()), sortedLinesInfo.size() * sizeof(LineInfo));
-//            sortedLinesInfo.clear();
-//            averageChunkOfChunkEnd += m_averageChunkOfChunkSize;
-//            dataKeypoints.push_back(globalPosition);
-//            indexKeypoints.push_back((i+1) * sizeof(LineInfo));
-//        }
-//    }
-//    dataKeypoints.push_back(globalPosition);
-//    indexKeypoints.push_back(idx.size() * sizeof(LineInfo));
-
-//    ChunksVector dataChunks, indexChunks;
-//    for(size_t i = 0; i < dataKeypoints.size() - 1; i++)
-//    {
-//        dataChunks.push_back({dataKeypoints[i], dataKeypoints[i+1]});
-//        indexChunks.push_back({indexKeypoints[i], indexKeypoints[i+1]});
-//    }
-//    indexFile.write(reinterpret_cast<char*>(sortedLinesInfo.data()), sortedLinesInfo.size() * sizeof(LineInfo));
-//    chunkFile.close();
-//    indexFile.close();
-
-//    return {IterativeFile(chunkFilePath, dataChunks), IterativeFile(chunkIndexFilePath,indexChunks)};
-//}
-
-
-//void merge(vector<pair<IterativeFile, IterativeFile> > &m_chunks, const string & m_outputFile)
-//{
-//    //some cache variables for saving CPU time on vector indexing operations;
-//    vector<char*> currDatas(m_chunks.size());
-//    vector<LineInfo*> currLineInfos(m_chunks.size());
-//    vector<size_t> currLineInfoSizes(m_chunks.size());
-//    vector<size_t> currLineNum(m_chunks.size(), 0);
-
-//    for(size_t i = 0; i < m_chunks.size(); i++)
-//    {
-//        if(!m_chunks[i].first.init())
-//            throw string("can't open file: ") + m_chunks[i].first.filePath;
-//        m_chunks[i].first.loadNextChunk();
-//        currDatas[i] = m_chunks[i].first.data.data();
-
-//        if(!m_chunks[i].second.init())
-//            throw string("can't open file: ") + m_chunks[i].second.filePath;
-//        m_chunks[i].second.loadNextChunk();
-//        currLineInfos[i] = reinterpret_cast<LineInfo *>(m_chunks[i].second.data.data());
-//        currLineInfoSizes[i] = m_chunks[i].second.data.size() / sizeof(LineInfo);
-//    }
-
-//    auto compartator = [&](size_t l1, size_t l2) {
-//        const char* data1 = currDatas[l1] + currLineInfos[l1]->strStart - currLineInfos[l1]->start;
-//        const char* data2 = currDatas[l2] + currLineInfos[l2]->strStart - currLineInfos[l2]->start;
-
-//        int cmp = customSTRCMP(data1, data2);
-//        if (cmp > 0)
-//            return true;
-//        else if (cmp < 0)
-//            return false;
-//        else
-//            return currLineInfos[l1]->num > currLineInfos[l2]->num;
-//    };
-
-//    priority_queue<size_t,  vector<size_t>, decltype(compartator)> q(compartator);
-
-//    for (size_t i = 0; i < m_chunks.size(); i++)
-//        q.push(i);
-
-//    ofstream outputStream(m_outputFile, ios::binary);
-//    if(!outputStream)
-//        throw string("can't open file: ") + m_outputFile;
-
-//    while(!q.empty())
-//    {
-
-//        size_t poppedIndex = q.top();
-//        q.pop();
-
-//        //        string pstr = to_string(poppedIndex) + " " + to_string(currLineInfos[poppedIndex]->finis - currLineInfos[poppedIndex]->strStart) + " ";
-//        //        outputStream.write(pstr.data(), pstr.size());
-
-//        outputStream.write(currDatas[poppedIndex],
-//                           currLineInfos[poppedIndex]->finis - currLineInfos[poppedIndex]->start);
-
-//        currDatas.at(poppedIndex) += currLineInfos[poppedIndex]->finis - currLineInfos[poppedIndex]->start; //currLineInfos[poppedIndex]->start - m_chunks[poppedIndex].first.globalOffset;
-//        currLineNum.at(poppedIndex) ++;
-//        currLineInfos.at(poppedIndex) ++;
-
-//        if(currLineNum[poppedIndex] >= currLineInfoSizes[poppedIndex])
-//        {
-//            bool isNext = m_chunks[poppedIndex].first.loadNextChunk() && m_chunks[poppedIndex].second.loadNextChunk();
-//            currLineNum.at(poppedIndex) = 0;
-//            currLineInfos.at(poppedIndex) = reinterpret_cast<LineInfo *>(m_chunks[poppedIndex].second.data.data());
-//            currDatas.at(poppedIndex) = m_chunks[poppedIndex].first.data.data();
-//            currLineInfoSizes.at(poppedIndex) = m_chunks[poppedIndex].second.data.size() / sizeof(LineInfo);
-//            if(!isNext)
-//                continue;
-//        }
-//        q.push(poppedIndex);
-//    }
-
-//    outputStream.close();
-//}
-
-
-//    // in case of little file just run index sort; TODO not create index file
-//    if(chunkBounds.size() == 1)
-//    {
-//        cout << "file is small. use sort without chunks.." << endl;
-//        IterativeFile file(inputFile, chunkBounds);
-//        if (!file.init())
-//            throw string("can't open file:") + inputFile;
-//        file.loadNextChunk();
-
-//        vector<LineInfo> lineData = collectLineInfo(file.data);
-//        vector<size_t> idx = sortIndexes(lineData, file.data);
-//        string chunkIndexFilePath = genFilePath(cacheFolder, "chunkIndex", 0);
-//        saveSortedChunk(idx, lineData, file.data, outputFile, chunkIndexFilePath, fileSize);
-
-//        int time = tracker.elapsed();
-//        float bytesPerSecond = float(fileSize) / float(float(max(time, 1)) / 1000.0f);
-//        cout << "FINISH. time:" << time << " msec. speed: " << int(bytesPerSecond)  << " bytes/sec" << endl;
-//        return;
-//    }
-
-//    int64_t averageChunkOfChunkSize = averageChunkSize / (chunkBounds.size());
-
-//    IterativeFile file(inputFile, chunkBounds);
-//    if (!file.init())
-//        throw string("can't open file:") + inputFile;
-
-//    vector<pair<IterativeFile, IterativeFile>> m_chunks;
-//    size_t chunkIndex = 0;
-//    while(file.loadNextChunk())
-//    {
-//        vector<LineInfo> lineData = collectLineInfo(file.data);
-//        vector<size_t> idx = sortIndexes(lineData, file.data);
-//        string chunkFilePath = genFilePath(cacheFolder, "chunk", chunkIndex);
-//        string chunkIndexFilePath = genFilePath(cacheFolder, "chunkIndex", chunkIndex);
-//        m_chunks.emplace_back(saveSortedChunk(idx, lineData, file.data, chunkFilePath, chunkIndexFilePath, averageChunkOfChunkSize));
-//        chunkIndex++;
-//    }
-//    file.close();
-
-//    cout << "create chunks time:" << tracker.elapsed() << endl;
-
-//    //merge(m_chunks, outputFile);
-
-//    for(auto &filePair : m_chunks)
-//    {
-//        remove(filePair.first.filePath.c_str());
-//        remove(filePair.second.filePath.c_str());
-//    }
-
-//    int time = tracker.elapsed();
-//    float bytesPerSecond = float(fileSize) / float(float(max(time, 1)) / 1000.0f);
-//    cout << "FINISH. time:" << time << " msec. speed: " << int(bytesPerSecond)  << " bytes/sec" << endl;
 }

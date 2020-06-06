@@ -7,6 +7,11 @@
 #include <cstring>
 #include <chrono>
 #include <mutex>
+#include <iostream>
+#include <thread>
+#include <string>
+#include <sstream>
+
 
 namespace sorter
 {
@@ -34,7 +39,7 @@ private:
     unsigned long m_count;
 };
 
-struct IterativeFile{
+class IterativeFile{
 public:
     IterativeFile(const std::string &m_filePath, const ChunksVector &m_chunksInfo);
     bool init();
@@ -42,17 +47,12 @@ public:
     void close();
     std::vector<char> data; // current loaded chunk
 
-    const std::string filePath()
-    {
-        return m_filePath;
-    }
+    const std::string filePath();
 private:
     std::ifstream m_file;
     std::string m_filePath;
     ChunksVector m_chunksInfo; //info about file parts
     size_t m_indexOfChunk;    //current index of chunksInfo
-
-
 };
 
 class TimeTracker
@@ -65,7 +65,7 @@ private:
 };
 
 // just chunk file into shunks with appropriate size
-std::vector<std::pair<int64_t, int64_t>> findChunkBounds(const std::string &filePath, int64_t averageChunkSize);
+ChunksVector findChunkBounds(const std::string &filePath, int64_t averageChunkSize);
 
 // sort by indexes
 std::vector<size_t> sortIndexes(const std::vector<LineInfo> &lineData, const std::vector<char> &data);
@@ -80,13 +80,22 @@ std::vector<IterativeFile> asyncChunkSort(const std::string &filePath, const Chu
 void merge(std::vector<IterativeFile> &iterativeChunks, const std::string & outputFile);
 
 //utilite for saving data due to sorted cache. return "microchunks" of saved chunk-file
-ChunksVector saveSortedChunk(const std::vector<size_t> &idx, const std::vector<LineInfo> &linesInfo, std::vector<char> &rawData, const std::string &chunkFilePath, size_t m_averageChunkOfChunkSize);
+ChunksVector saveSortedChunk(const std::vector<size_t> &idx, const std::vector<LineInfo> &linesInfo, std::vector<char> &rawData, const std::string &chunkFilePath, size_t averageChunkOfChunkSize);
 
+//waiting for full c++17 support...
 std::string genFilePath(const std::string &folder, const std::string &name, int index);
 
 //we need to stop strcmp after the \n (not \00)
 //copypaste from glibc/string/strcmp.c
 inline char customSTRCMP(const char *p1, const char *p2);
+
+struct SafeCout : public std::stringstream
+{
+    static inline std::mutex m_mutex;
+    ~SafeCout();
+};
+
+
 
 };
 
