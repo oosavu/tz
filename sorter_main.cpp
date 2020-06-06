@@ -2,10 +2,11 @@
 #include "cmdopts.h"
 #include "sorter.h"
 #include <future>
+
 struct Options
 {
-    int64_t chunkSize{1073741824};
-    //int64_t chunkSize{10000};
+    //int64_t chunkSize{1073741824};
+    int64_t chunkSize{100000000};
     std::string inputFile{"file.txt"};
     std::string outputFile{"out.txt"};
     std::string cacheDir{""};

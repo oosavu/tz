@@ -89,14 +89,6 @@ std::string genFilePath(const std::string &folder, const std::string &name, int 
 //copypaste from glibc/string/strcmp.c
 inline char customSTRCMP(const char *p1, const char *p2);
 
-struct SafeCout : public std::stringstream
-{
-    static inline std::mutex m_mutex;
-    ~SafeCout();
-};
-
-
-
 };
 
 #endif // SORTER_H

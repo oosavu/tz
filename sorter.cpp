@@ -7,6 +7,7 @@
 #include <execution>
 #include <future>
 #include "asyncfile.h"
+#include "spdlog/spdlog.h"
 
 using namespace std;
 
@@ -15,14 +16,14 @@ namespace sorter{
 vector<IterativeFile> asyncChunkSort(const string &inputFile, const ChunksVector &chunkBounds, const string &cacheFolder, const int64_t averageChunkSize)
 {
     int64_t averageChunkOfChunkSize = averageChunkSize / (chunkBounds.size());
-    Semaphore taskCounter(3); // memory limit
+    Semaphore taskCounter(4); // memory limit
     mutex fileSystemMutex;
 
     auto sortFunctor = [&](int indexOfChunk) -> pair<string, ChunksVector>{
         std::string debugID = to_string(indexOfChunk) + "[" + to_string(chunkBounds[indexOfChunk].first) + "-" + to_string(chunkBounds[indexOfChunk].second) + "]";
 
         taskCounter.wait();
-        SafeCout{} << "wake up thread for " << debugID << endl;
+        spdlog::info("wake up thread for " + debugID);
         int64_t globalOffset = chunkBounds[indexOfChunk].first;
         int64_t currSize = chunkBounds[indexOfChunk].second - chunkBounds[indexOfChunk].first;
 
@@ -30,7 +31,7 @@ vector<IterativeFile> asyncChunkSort(const string &inputFile, const ChunksVector
         vector<LineInfo> lineData;
         {
             unique_lock<mutex> locker(fileSystemMutex);
-            SafeCout{} << "start read part " << debugID << endl;
+            spdlog::info("start read part for " + debugID);
             ifstream file(inputFile, ios::binary);
             if (!file)
                 throw string("can't open file:") + inputFile;
@@ -40,18 +41,19 @@ vector<IterativeFile> asyncChunkSort(const string &inputFile, const ChunksVector
                 throw string("read error:") + inputFile;
             file.close();
         }
-        SafeCout{} << "start sort " << indexOfChunk << endl;
+        spdlog::info("start collectLineInfo " + debugID);
         lineData = collectLineInfo(data);
+        spdlog::info("start sort for " + debugID);
         vector<size_t> idx = sortIndexes(lineData, data);
         ChunksVector bounds;
         string chunkFilePath = genFilePath(cacheFolder, "chunk", indexOfChunk);
         {
             unique_lock<mutex> locker(fileSystemMutex);
-            SafeCout{} << "start save " << debugID << endl;
+            spdlog::info("start save " + debugID);
             bounds = saveSortedChunk(idx, lineData, data, chunkFilePath, averageChunkOfChunkSize);
         }
         taskCounter.notify();
-        SafeCout{} << "finis " << debugID << endl;
+        spdlog::info("finis " + debugID);
         return {chunkFilePath, bounds};
     };
     vector<future<pair<string, ChunksVector>>> results;
@@ -78,13 +80,10 @@ void sortBigFile(const string &cacheFolder, const string &inputFile, const strin
     int64_t fileSize = chunkBounds.back().second - chunkBounds.front().first;
     cout << "input file size:" << fileSize << " chunks:" << chunkBounds.size() << endl;
 
-    if(chunkBounds.size() == 1)
-    {
-        int time = tracker.elapsed();
-        float bytesPerSecond = float(fileSize) / float(float(max(time, 1)) / 1000.0f);
-        cout << "FINISH. time:" << time << " msec. speed: " << int(bytesPerSecond)  << " bytes/sec" << endl;
-        return;
-    }
+//    if(chunkBounds.size() == 1)
+//    {
+//          TODO in real program (not test case for a job) we need to avoid double sorting for small files;
+//    }
 
     vector<IterativeFile> chunkFiles = asyncChunkSort(inputFile, chunkBounds, cacheFolder, averageChunkSize);
     cout << "create chunks time:" << tracker.elapsed() << endl;
@@ -180,7 +179,7 @@ vector<LineInfo> collectLineInfo(vector<char> &data)
         auto dotPosition = find(i, end, '.');
         dotPosition ++; // skip dot
         dotPosition ++; // skip space
-        lineInfo.strStart = distance(data.begin(), dotPosition);
+        lineInfo.strStart = 23;// distance(data.begin(), dotPosition);
         i = find(dotPosition, end, '\n');
         i++;
         lineInfo.finis = distance(data.begin(), i);
@@ -192,6 +191,7 @@ vector<LineInfo> collectLineInfo(vector<char> &data)
 
 void merge(vector<IterativeFile> &iterativeChunks, const string & outputFile)
 {
+    cout << "init merge ...";
     vector<char*> currDatas(iterativeChunks.size());
     vector<vector<LineInfo>> currLineInfos(iterativeChunks.size());
     vector<vector<LineInfo>::iterator> iterators(iterativeChunks.size());
@@ -382,10 +382,5 @@ void Semaphore::wait() {
     --m_count;
 }
 
-SafeCout::~SafeCout() {
-    std::lock_guard<std::mutex> locker(m_mutex);
-    std::cout << rdbuf();
-    std::cout.flush();
-}
 
 }

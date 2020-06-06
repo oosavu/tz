@@ -5,6 +5,7 @@
 #include <fstream>
 #include <stdio.h>
 #include <chrono>
+#include <algorithm>
 #include "cmdopts.h"
 #include "asyncfile.h"
 
@@ -12,10 +13,9 @@ using namespace std;
 
 struct Options
 {
-    int64_t filesize{10000000000};
-    //int64_t filesize{100000};
+    int64_t filesize{10000000000}; // int64_t filesize{100000};
     std::string filepath{"file.txt"};
-    int stringsCount{10};
+    int stringsCount{1000};
     int numsCount{1000};
     int maxStrLen{50};
     int maxNum{100000};
@@ -58,6 +58,8 @@ private:
 
 int main(int argc, const char* argv[])
 {
+    std::chrono::system_clock::time_point startTime = std::chrono::system_clock::now();
+
     auto parser = CmdOpts<Options>::Create({{"--filesize", &Options::filesize },
                                             {"--filepath", &Options::filepath },
                                             {"--stringsCount", &Options::stringsCount},
@@ -68,7 +70,7 @@ int main(int argc, const char* argv[])
 
     auto opts = parser->parse(argc, argv);
 
-    AsyncOstream stream(opts.filepath, 100000000); // ~100mb internal chunks buff
+    AsyncOstream stream(opts.filepath);
     if(!stream.isValid())
     {
         cerr << "ERROR: can't open file:" << opts.filepath;
@@ -77,12 +79,12 @@ int main(int argc, const char* argv[])
 
     GeneratorEngine engine(opts);
 
-    std::chrono::system_clock::time_point startTime = std::chrono::system_clock::now();
+
 
     int64_t bytesCount = 0;
     int64_t linesCount = 0;
 
-    //slow variant, no big memory cache usage
+    //slow variant, no big memory cache usage. no garantie to have same strings!
     if (opts.fullRandom)
     {
         while (bytesCount < opts.filesize)
@@ -91,14 +93,13 @@ int main(int argc, const char* argv[])
             std::string str = engine.genString();
             bytesCount += num.size() + str.size();
             stream << num << str;
-
-            // astream << num <<str;
             linesCount++;
         }
     }
-    //fast variant. generate cache then combine it;
+    //fast variant. generate cache then combine it; you can garantie to have same strings by manipulating opts
     else
     {
+        // generate cache...
         std::vector<std::string> numsCache(opts.numsCount);
         for(int i = 0; i < opts.numsCount; i++)
             numsCache[i] = engine.genNum();
@@ -120,11 +121,10 @@ int main(int argc, const char* argv[])
             linesCount++;
         }
     }
-    stream.flush();
 
     std::chrono::system_clock::time_point currentTime = std::chrono::system_clock::now();
     auto time = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count();
-    float bytesPerSecond = float(bytesCount) / (float(time) / 1000.0f);
+    float bytesPerSecond = float(bytesCount) / (float(max(time, 1ll)) / 1000.0f);
     cout << "GENERATE FILE FINISH." << " file:" << opts.filepath << " size:" << bytesCount << " lines:" << linesCount <<
             " time:" << time << " msec. speed: " << int(bytesPerSecond)  << " bytes/sec" << endl;
     return 0;
