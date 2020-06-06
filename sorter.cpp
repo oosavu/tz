@@ -179,7 +179,7 @@ vector<LineInfo> collectLineInfo(vector<char> &data)
         auto dotPosition = find(i, end, '.');
         dotPosition ++; // skip dot
         dotPosition ++; // skip space
-        lineInfo.strStart = 23;// distance(data.begin(), dotPosition);
+        lineInfo.strStart = dotPosition - data.begin();
         i = find(dotPosition, end, '\n');
         i++;
         lineInfo.finis = i - data.begin(); //distance(data.begin(), i);// i - data.begin(); //
