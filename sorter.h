@@ -44,6 +44,8 @@ public:
     IterativeFile(const std::string &m_filePath, const ChunksVector &m_chunksInfo);
     bool init();
     bool loadNextChunk();
+    int currentChunk();
+    int chunksCount();
     void close();
     std::vector<char> data; // current loaded chunk
 

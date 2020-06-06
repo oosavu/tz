@@ -6,6 +6,7 @@
 #include <chrono>
 #include <execution>
 #include <future>
+#include <memory>
 #include "asyncfile.h"
 #include "spdlog/spdlog.h"
 
@@ -17,7 +18,6 @@ vector<IterativeFile> asyncChunkSort(const string &inputFile, const ChunksVector
 {
     int64_t averageChunkOfChunkSize = averageChunkSize / (chunkBounds.size());
     Semaphore taskCounter(4); // memory limit
-    //mutex fileSystemMutex;
 
     auto sortFunctor = [&](int indexOfChunk) -> pair<string, ChunksVector>{
         std::string debugID = to_string(indexOfChunk) + "[" + to_string(chunkBounds[indexOfChunk].first) + "-" + to_string(chunkBounds[indexOfChunk].second) + "]";
@@ -30,15 +30,12 @@ vector<IterativeFile> asyncChunkSort(const string &inputFile, const ChunksVector
         vector<char> data;
         vector<LineInfo> lineData;
         {
-      //      unique_lock<mutex> locker(fileSystemMutex);
             spdlog::info("start read part for " + debugID);
 
             FILE* file = fopen(inputFile.c_str(),"rb");
-            //ifstream file(inputFile, ios::binary);
             if (!file)
                 throw string("can't open file:") + inputFile;
             fseek(file, globalOffset, 0);
-            //file.seekg(globalOffset);
             data.resize(currSize);
 
             if(!ElementaryFileOperations::read(file, chunkBounds[indexOfChunk].first, chunkBounds[indexOfChunk].second, data))
@@ -52,7 +49,6 @@ vector<IterativeFile> asyncChunkSort(const string &inputFile, const ChunksVector
         ChunksVector bounds;
         string chunkFilePath = genFilePath(cacheFolder, "chunk", indexOfChunk);
         {
-            //unique_lock<mutex> locker(fileSystemMutex);
             spdlog::info("start save " + debugID);
             bounds = saveSortedChunk(idx, lineData, data, chunkFilePath, averageChunkOfChunkSize);
         }
@@ -86,7 +82,7 @@ void sortBigFile(const string &cacheFolder, const string &inputFile, const strin
 
 //    if(chunkBounds.size() == 1)
 //    {
-//          TODO in real program (not test case for a job) we need to avoid double sorting for small files;
+//          TODO in real program (not in a test case for a job :) ) we must avoid double sorting for small files;
 //    }
 
     vector<IterativeFile> chunkFiles = asyncChunkSort(inputFile, chunkBounds, cacheFolder, averageChunkSize);
@@ -196,23 +192,57 @@ vector<LineInfo> collectLineInfo(vector<char> &data)
 void merge(vector<IterativeFile> &iterativeChunks, const string & outputFile)
 {
     cout << "init merge ...";
-    vector<char*> currDatas(iterativeChunks.size());
-    vector<vector<LineInfo>> currLineInfos(iterativeChunks.size());
-    vector<vector<LineInfo>::iterator> iterators(iterativeChunks.size());
+    struct PreparedChunk
+    {
+        bool isValid;
+        char* currDataPointer;
+        vector<char> currData;
+        vector<LineInfo> currLineInfo;
+        vector<LineInfo>::iterator iterator;
+    };
 
+    vector<PreparedChunk> curredChunks(iterativeChunks.size());
+    vector<future<PreparedChunk>> futureChunks(iterativeChunks.size());
+
+    auto prepareChunkFunctor = [&](int i) -> PreparedChunk{
+        PreparedChunk res;
+        if(!iterativeChunks[i].loadNextChunk())
+        {
+            res.isValid = false;
+            spdlog::info("lsdfsdf");
+            return res;
+        }
+        res.isValid = true;
+        swap(res.currData, iterativeChunks[i].data);
+        res.currDataPointer = res.currData.data();
+        res.currLineInfo = collectLineInfo(res.currData);
+        res.iterator = res.currLineInfo.begin();
+        spdlog::info("loaded");
+        return res;
+    };
+
+    //load first
     for(size_t i = 0; i < iterativeChunks.size(); i++)
     {
         if(!iterativeChunks[i].init())
             throw string("can't open file: ") + iterativeChunks[i].filePath();
-        iterativeChunks[i].loadNextChunk();
-        currDatas[i] = iterativeChunks[i].data.data();
-        currLineInfos[i] = collectLineInfo(iterativeChunks[i].data);
-        iterators[i] = currLineInfos[i].begin();
+        futureChunks[i] = async(prepareChunkFunctor, i);
+    }
+
+    //wait first and load next
+    for(size_t i = 0; i < iterativeChunks.size(); i++)
+    {
+        curredChunks[i] = futureChunks[i].get();
+        if(!curredChunks[i].isValid)
+            throw string("can't load first chunk: ") + iterativeChunks[i].filePath();
+        futureChunks[i] = async(prepareChunkFunctor, i);
     }
 
     auto compartator = [&](size_t l1, size_t l2) {
-        const char* data1 = currDatas[l1] + iterators[l1]->strStart - iterators[l1]->start;
-        const char* data2 = currDatas[l2] + iterators[l2]->strStart - iterators[l2]->start;
+        PreparedChunk &p1 = curredChunks[l1];
+        PreparedChunk &p2 = curredChunks[l2];
+        const char* data1 = p1.currDataPointer + p1.iterator->strStart - p1.iterator->start;
+        const char* data2 = p2.currDataPointer + p2.iterator->strStart - p2.iterator->start;
 
         int cmp = customSTRCMP(data1 , data2);
         if (cmp > 0)
@@ -220,7 +250,7 @@ void merge(vector<IterativeFile> &iterativeChunks, const string & outputFile)
         else if (cmp < 0)
             return false;
         else
-            return iterators[l1]->num > iterators[l2]->num;
+            return p1.iterator->num > p1.iterator->num;
     };
 
     priority_queue<size_t,  vector<size_t>, decltype(compartator)> q(compartator);
@@ -241,23 +271,26 @@ void merge(vector<IterativeFile> &iterativeChunks, const string & outputFile)
         //        string pstr = to_string(poppedIndex) + " " + to_string(currLineInfos[poppedIndex]->finis - currLineInfos[poppedIndex]->strStart) + " ";
         //        outputStream.write(pstr.data(), pstr.size());
 
-        outputStream.write(currDatas[poppedIndex],
-                           iterators[poppedIndex]->finis - iterators[poppedIndex]->start);
+        PreparedChunk &chunk = curredChunks[poppedIndex];
+        outputStream.write(chunk.currDataPointer,
+                           chunk.iterator->finis - chunk.iterator->start);
 
-        currDatas.at(poppedIndex) += iterators[poppedIndex]->finis - iterators[poppedIndex]->start; //currLineInfos[poppedIndex]->start - m_chunks[poppedIndex].first.globalOffset;
-        iterators.at(poppedIndex) ++;
+        chunk.currDataPointer += chunk.iterator->finis - chunk.iterator->start;
+        chunk.iterator ++;
 
-        if(iterators.at(poppedIndex) == currLineInfos.at(poppedIndex).end())
+        if(chunk.iterator == chunk.currLineInfo.end())
         {
-            bool isNext = iterativeChunks[poppedIndex].loadNextChunk();
-            currDatas[poppedIndex] = iterativeChunks[poppedIndex].data.data();
-            currLineInfos[poppedIndex] = collectLineInfo(iterativeChunks[poppedIndex].data);
-            iterators[poppedIndex] = currLineInfos[poppedIndex].begin();
-            if(!isNext)
+            curredChunks[poppedIndex] = futureChunks[poppedIndex].get();
+            if(curredChunks[poppedIndex].isValid)
+            {
+                futureChunks[poppedIndex] = async(prepareChunkFunctor, poppedIndex);
+            }
+            else
             {
                 iterativeChunks[poppedIndex].close();
                 continue;
             }
+
         }
         q.push(poppedIndex);
     }
@@ -315,6 +348,16 @@ bool IterativeFile::loadNextChunk()
     if(!m_file.read(data.data(), data.size()))
         throw string("read error:") + m_filePath;
     return true;
+}
+
+int IterativeFile::currentChunk()
+{
+    return m_indexOfChunk;
+}
+
+int IterativeFile::chunksCount()
+{
+    return m_chunksInfo.size();
 }
 
 void IterativeFile::close()
