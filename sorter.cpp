@@ -17,7 +17,7 @@ vector<IterativeFile> asyncChunkSort(const string &inputFile, const ChunksVector
 {
     int64_t averageChunkOfChunkSize = averageChunkSize / (chunkBounds.size());
     Semaphore taskCounter(4); // memory limit
-    mutex fileSystemMutex;
+    //mutex fileSystemMutex;
 
     auto sortFunctor = [&](int indexOfChunk) -> pair<string, ChunksVector>{
         std::string debugID = to_string(indexOfChunk) + "[" + to_string(chunkBounds[indexOfChunk].first) + "-" + to_string(chunkBounds[indexOfChunk].second) + "]";
@@ -27,19 +27,23 @@ vector<IterativeFile> asyncChunkSort(const string &inputFile, const ChunksVector
         int64_t globalOffset = chunkBounds[indexOfChunk].first;
         int64_t currSize = chunkBounds[indexOfChunk].second - chunkBounds[indexOfChunk].first;
 
-        vector<char> data(currSize);
+        vector<char> data;
         vector<LineInfo> lineData;
         {
-            unique_lock<mutex> locker(fileSystemMutex);
+      //      unique_lock<mutex> locker(fileSystemMutex);
             spdlog::info("start read part for " + debugID);
-            ifstream file(inputFile, ios::binary);
+
+            FILE* file = fopen(inputFile.c_str(),"rb");
+            //ifstream file(inputFile, ios::binary);
             if (!file)
                 throw string("can't open file:") + inputFile;
-            file.seekg(globalOffset);
+            fseek(file, globalOffset, 0);
+            //file.seekg(globalOffset);
             data.resize(currSize);
-            if(!file.read(data.data(), data.size()))
+
+            if(!ElementaryFileOperations::read(file, chunkBounds[indexOfChunk].first, chunkBounds[indexOfChunk].second, data))
                 throw string("read error:") + inputFile;
-            file.close();
+            fclose(file);
         }
         spdlog::info("start collectLineInfo " + debugID);
         lineData = collectLineInfo(data);
@@ -48,7 +52,7 @@ vector<IterativeFile> asyncChunkSort(const string &inputFile, const ChunksVector
         ChunksVector bounds;
         string chunkFilePath = genFilePath(cacheFolder, "chunk", indexOfChunk);
         {
-            unique_lock<mutex> locker(fileSystemMutex);
+            //unique_lock<mutex> locker(fileSystemMutex);
             spdlog::info("start save " + debugID);
             bounds = saveSortedChunk(idx, lineData, data, chunkFilePath, averageChunkOfChunkSize);
         }

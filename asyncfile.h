@@ -14,6 +14,29 @@
 #include <utility>
 
 
+class ElementaryFileOperations
+{
+    inline static std::mutex m_fileSystemGlobalMutex;
+public:
+    static bool read(FILE* file, int64_t startByte, int64_t endByte, std::vector<char> &data)
+    {
+        std::unique_lock<std::mutex> locker(m_fileSystemGlobalMutex);
+        int64_t size = endByte - startByte;
+        data.resize(size);
+        return fread(data.data(), sizeof(char), size, file) == size;
+    }
+
+    static bool write(FILE* file, std::vector<char> &data)
+    {
+        std::unique_lock<std::mutex> locker(m_fileSystemGlobalMutex);
+        //data.resize(endByte - startByte);
+        return fwrite(data.data(), sizeof(char), data.size(), file) == data.size();
+    }
+};
+
+
+
+
 class AsyncOStreamBuf : public std::streambuf
 {
 public:

@@ -36,23 +36,18 @@ bool AsyncOStreamBuf::isValid()
 }
 
 void AsyncOStreamBuf::worker() {
-    //std::cout << "worker start" << std::endl;
     while (!m_done)
     {
         std::unique_lock<std::mutex> guard(this->m_mutex);
         this->m_condition.wait(guard,[this](){
             return !this->m_currChunk.empty() || this->m_done;
         });
-        //  std::cout << "worker wakeup" << std::endl;
-        fwrite(m_currChunk.data(), sizeof(char),m_currChunk.size(), m_file);
+        ElementaryFileOperations::write(m_file, m_currChunk);
         m_currChunk.clear();
-        fflush(m_file);
         m_condition.notify_one();
     }
-    fwrite(m_currChunk.data(), sizeof(char),m_currChunk.size(), m_file);
-    fflush(m_file);
+    ElementaryFileOperations::write(m_file, m_currChunk);
     fclose(m_file);
-    //std::cout << "worker finis" << std::endl;
 }
 
 std::streamsize AsyncOStreamBuf::xsputn(const char *s, std::streamsize n)
