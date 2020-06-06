@@ -174,7 +174,7 @@ vector<LineInfo> collectLineInfo(vector<char> &data)
     while(i != end)
     {
         LineInfo lineInfo;
-        lineInfo.start = distance(data.begin(), i);
+        lineInfo.start = i - data.begin();  //distance(data.begin(), i);////
         lineInfo.num =  static_cast<unsigned int>(atoi(&rawData[lineInfo.start]));
         auto dotPosition = find(i, end, '.');
         dotPosition ++; // skip dot
@@ -182,7 +182,7 @@ vector<LineInfo> collectLineInfo(vector<char> &data)
         lineInfo.strStart = 23;// distance(data.begin(), dotPosition);
         i = find(dotPosition, end, '\n');
         i++;
-        lineInfo.finis = distance(data.begin(), i);
+        lineInfo.finis = i - data.begin(); //distance(data.begin(), i);// i - data.begin(); //
         lines.emplace_back(lineInfo);
     }
     return lines;
