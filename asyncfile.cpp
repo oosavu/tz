@@ -49,6 +49,7 @@ void AsyncOStreamBuf::worker() {
         fflush(m_file);
         m_condition.notify_one();
     }
+    fwrite(m_currChunk.data(), sizeof(char),m_currChunk.size(), m_file);
     fflush(m_file);
     fclose(m_file);
     //std::cout << "worker finis" << std::endl;
@@ -68,10 +69,10 @@ std::streamsize AsyncOStreamBuf::xsputn(const char *s, std::streamsize n)
 
 void AsyncOStreamBuf::swapChunks()
 {
-    std::cout << "start swap" << std::endl;
+    //std::cout << "start swap" << std::endl;
     {
         std::unique_lock<std::mutex> guard(this->m_mutex);
-        std::cout << "append wait..." << std::endl;
+        //std::cout << "append wait..." << std::endl;
         m_condition.wait(guard,[this](){
             return this->m_currChunk.empty();
         });

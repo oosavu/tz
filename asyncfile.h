@@ -42,7 +42,7 @@ class AsyncOstream : public std::ostream
 {
     AsyncOStreamBuf m_streamBuf;
 public:
-    AsyncOstream(const std::string & name, size_t chunkSize = 10000);
+    AsyncOstream(const std::string & name, size_t chunkSize = 10000000); //10mb cache
     bool isValid();
 };
 

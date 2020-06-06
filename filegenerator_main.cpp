@@ -13,6 +13,7 @@ using namespace std;
 struct Options
 {
     int64_t filesize{10000000000};
+    //int64_t filesize{100000};
     std::string filepath{"file.txt"};
     int stringsCount{10};
     int numsCount{1000};

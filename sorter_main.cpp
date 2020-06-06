@@ -5,7 +5,8 @@
 struct Options
 {
     int64_t chunkSize{1073741824};
-    std::string inputFile{"in.txt"};
+    //int64_t chunkSize{10000};
+    std::string inputFile{"file.txt"};
     std::string outputFile{"out.txt"};
     std::string cacheDir{""};
 };
