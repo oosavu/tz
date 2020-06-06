@@ -29,30 +29,29 @@ vector<IterativeFile> asyncChunkSort(const string &inputFile, const ChunksVector
 
         vector<char> data;
         vector<LineInfo> lineData;
-        {
-            spdlog::info("start read part for " + debugID);
 
-            FILE* file = fopen(inputFile.c_str(),"rb");
-            if (!file)
-                throw string("can't open file:") + inputFile;
-            if(fseek(file, globalOffset, 0) != 0)
-                throw string("can't seek file:") + inputFile;
-            data.resize(currSize);
+        spdlog::info("start read part for " + debugID);
 
-            if(!ElementaryFileOperations::read(file, chunkBounds[indexOfChunk].first, chunkBounds[indexOfChunk].second, data))
-                throw string("read error:") + inputFile;
-            fclose(file);
-        }
+        FILE* file = fopen(inputFile.c_str(),"rb");
+        if (!file)
+            throw string("can't open file:") + inputFile;
+        if(fseek(file, globalOffset, 0) != 0)
+            throw string("can't seek file:") + inputFile;
+        data.resize(currSize);
+
+        if(!ElementaryFileOperations::read(file, chunkBounds[indexOfChunk].first, chunkBounds[indexOfChunk].second, data))
+            throw string("read error:") + inputFile;
+        fclose(file);
+
         spdlog::info("start collectLineInfo " + debugID);
         lineData = collectLineInfo(data);
         spdlog::info("start sort for " + debugID);
         vector<size_t> idx = sortIndexes(lineData, data);
         ChunksVector bounds;
         string chunkFilePath = genFilePath(cacheFolder, "chunk", indexOfChunk);
-        {
-            spdlog::info("start save " + debugID);
-            bounds = saveSortedChunk(idx, lineData, data, chunkFilePath, averageChunkOfChunkSize);
-        }
+        spdlog::info("start save " + debugID);
+        bounds = saveSortedChunk(idx, lineData, data, chunkFilePath, averageChunkOfChunkSize);
+
         taskCounter.notify();
         spdlog::info("finis " + debugID);
         return {chunkFilePath, bounds};
@@ -81,10 +80,10 @@ void sortBigFile(const string &cacheFolder, const string &inputFile, const strin
     int64_t fileSize = chunkBounds.back().second - chunkBounds.front().first;
     cout << "input file size:" << fileSize << " chunks:" << chunkBounds.size() << endl;
 
-//    if(chunkBounds.size() == 1)
-//    {
-//          TODO in real program (not in a test case for a job :) ) we must avoid double sorting for small files;
-//    }
+    //    if(chunkBounds.size() == 1)
+    //    {
+    //          TODO in real program (not in a test case for a job :) ) we must avoid double sorting for small files;
+    //    }
 
     vector<IterativeFile> chunkFiles = asyncChunkSort(inputFile, chunkBounds, cacheFolder, averageChunkSize);
     cout << "create chunks time:" << tracker.elapsed() << endl;
