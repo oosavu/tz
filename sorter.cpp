@@ -35,7 +35,8 @@ vector<IterativeFile> asyncChunkSort(const string &inputFile, const ChunksVector
             FILE* file = fopen(inputFile.c_str(),"rb");
             if (!file)
                 throw string("can't open file:") + inputFile;
-            fseek(file, globalOffset, 0);
+            if(fseek(file, globalOffset, 0) != 0)
+                throw string("can't seek file:") + inputFile;
             data.resize(currSize);
 
             if(!ElementaryFileOperations::read(file, chunkBounds[indexOfChunk].first, chunkBounds[indexOfChunk].second, data))
@@ -204,12 +205,27 @@ void merge(vector<IterativeFile> &iterativeChunks, const string & outputFile)
     vector<PreparedChunk> curredChunks(iterativeChunks.size());
     vector<future<PreparedChunk>> futureChunks(iterativeChunks.size());
 
+
+    auto compartator = [&](size_t l1, size_t l2) {
+        PreparedChunk &p1 = curredChunks[l1];
+        PreparedChunk &p2 = curredChunks[l2];
+        const char* data1 = p1.currDataPointer + p1.iterator->strStart - p1.iterator->start;
+        const char* data2 = p2.currDataPointer + p2.iterator->strStart - p2.iterator->start;
+
+        int cmp = customSTRCMP(data1 , data2);
+        if (cmp > 0)
+            return true;
+        else if (cmp < 0)
+            return false;
+        else
+            return p1.iterator->num > p1.iterator->num;
+    };
+
     auto prepareChunkFunctor = [&](int i) -> PreparedChunk{
         PreparedChunk res;
         if(!iterativeChunks[i].loadNextChunk())
         {
             res.isValid = false;
-            spdlog::info("lsdfsdf");
             return res;
         }
         res.isValid = true;
@@ -217,7 +233,6 @@ void merge(vector<IterativeFile> &iterativeChunks, const string & outputFile)
         res.currDataPointer = res.currData.data();
         res.currLineInfo = collectLineInfo(res.currData);
         res.iterator = res.currLineInfo.begin();
-        spdlog::info("loaded");
         return res;
     };
 
@@ -238,26 +253,12 @@ void merge(vector<IterativeFile> &iterativeChunks, const string & outputFile)
         futureChunks[i] = async(prepareChunkFunctor, i);
     }
 
-    auto compartator = [&](size_t l1, size_t l2) {
-        PreparedChunk &p1 = curredChunks[l1];
-        PreparedChunk &p2 = curredChunks[l2];
-        const char* data1 = p1.currDataPointer + p1.iterator->strStart - p1.iterator->start;
-        const char* data2 = p2.currDataPointer + p2.iterator->strStart - p2.iterator->start;
-
-        int cmp = customSTRCMP(data1 , data2);
-        if (cmp > 0)
-            return true;
-        else if (cmp < 0)
-            return false;
-        else
-            return p1.iterator->num > p1.iterator->num;
-    };
-
+    // init queue
     priority_queue<size_t,  vector<size_t>, decltype(compartator)> q(compartator);
-
     for (size_t i = 0; i < iterativeChunks.size(); i++)
         q.push(i);
 
+    //init output file
     AsyncOstream outputStream(outputFile);
     if(!outputStream.isValid())
         throw string("can't open file: ") + outputFile;
