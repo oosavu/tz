@@ -16,7 +16,7 @@
 namespace sorter
 {
 
-using ChunksVector = std::vector<std::pair<int64_t, int64_t>>;
+using ChunkBoundsVector = std::vector<std::pair<int64_t, int64_t>>;
 
 void sortBigFile(const std::string &cacheFolder, const std::string &inputFile, const std::string &outputFile, const int64_t chunkSize);
 
@@ -39,22 +39,33 @@ private:
     unsigned long m_count;
 };
 
+struct PreparedChunk
+{
+    bool isValid;
+    char* currDataPointer;
+    std::vector<char> data;
+    std::vector<LineInfo> lineInfo;
+    std::vector<LineInfo>::iterator lineIterator;
+};
+
+// operations for load file chunk-by-chunk
 class IterativeFile{
 public:
-    IterativeFile(const std::string &m_filePath, const ChunksVector &m_chunksInfo);
+    IterativeFile(const std::string &m_filePath, const ChunkBoundsVector &m_chunksInfo);
+
     bool init();
-    bool loadNextChunk();
+    bool loadNextChunk(std::vector<char> &data);
     int currentChunk();
     int chunksCount();
     void close();
-    std::vector<char> data; // current loaded chunk
 
     const std::string filePath();
 private:
     std::ifstream m_file;
     std::string m_filePath;
-    ChunksVector m_chunksInfo; //info about file parts
+    ChunkBoundsVector m_chunksInfo; //info about file parts
     size_t m_indexOfChunk;    //current index of chunksInfo
+
 };
 
 class TimeTracker
@@ -67,7 +78,7 @@ private:
 };
 
 // just chunk file into shunks with appropriate size
-ChunksVector findChunkBounds(const std::string &filePath, int64_t averageChunkSize);
+ChunkBoundsVector findChunkBounds(const std::string &filePath, int64_t averageChunkSize);
 
 // sort by indexes
 std::vector<size_t> sortIndexes(const std::vector<LineInfo> &lineData, const std::vector<char> &data);
@@ -76,13 +87,13 @@ std::vector<size_t> sortIndexes(const std::vector<LineInfo> &lineData, const std
 std::vector<LineInfo> collectLineInfo(std::vector<char> &data);
 
 //sort asynchoniasly parts of file and save this parts to cache folder
-std::vector<IterativeFile> asyncChunkSort(const std::string &filePath, const ChunksVector &chunks, const std::string &cacheFolder, const int64_t averageChunkSize);
+std::vector<IterativeFile> asyncChunkSort(const std::string &filePath, const ChunkBoundsVector &chunks, const std::string &cacheFolder, const int64_t averageChunkSize);
 
 //k-way merge sort with heap speedup
 void merge(std::vector<IterativeFile> &iterativeChunks, const std::string & outputFile);
 
 //utilite for saving data due to sorted cache. return "microchunks" of saved chunk-file
-ChunksVector saveSortedChunk(const std::vector<size_t> &idx, const std::vector<LineInfo> &linesInfo, std::vector<char> &rawData, const std::string &chunkFilePath, size_t averageChunkOfChunkSize);
+ChunkBoundsVector saveSortedChunk(const std::vector<size_t> &idx, const std::vector<LineInfo> &linesInfo, std::vector<char> &rawData, const std::string &chunkFilePath, size_t averageChunkOfChunkSize);
 
 //waiting for full c++17 support...
 std::string genFilePath(const std::string &folder, const std::string &name, int index);

@@ -8,14 +8,11 @@ AsyncOStreamBuf::AsyncOStreamBuf(const std::string &name, size_t chunkSize) :
 {
     m_chunk.reserve(m_maxChunkSize);
     m_currChunk.reserve(m_maxChunkSize);
-    m_file = fopen(m_name.c_str(),"wb");
+    m_file.open(m_name, std::ios::binary);
     if(!m_file)
-    {
-        std::cout << "can't open file " << name << std::endl;
         return;
-    }
-    m_isValid = true;
 
+    m_isValid = true;
     m_thread = std::thread(&AsyncOStreamBuf::worker, this);
 }
 
@@ -23,7 +20,7 @@ AsyncOStreamBuf::~AsyncOStreamBuf()
 {
     swapChunks();
     {
-        std::unique_lock<std::mutex>(this->m_mutex);
+        std::lock_guard<std::mutex>(this->m_mutex);
         this->m_done = true;
     }
     m_condition.notify_one();
@@ -47,7 +44,8 @@ void AsyncOStreamBuf::worker() {
         m_condition.notify_one();
     }
     ElementaryFileOperations::write(m_file, m_currChunk);
-    fclose(m_file);
+    m_currChunk.clear();
+    m_file.close();
 }
 
 std::streamsize AsyncOStreamBuf::xsputn(const char *s, std::streamsize n)
@@ -64,10 +62,8 @@ std::streamsize AsyncOStreamBuf::xsputn(const char *s, std::streamsize n)
 
 void AsyncOStreamBuf::swapChunks()
 {
-    //std::cout << "start swap" << std::endl;
     {
         std::unique_lock<std::mutex> guard(this->m_mutex);
-        //std::cout << "append wait..." << std::endl;
         m_condition.wait(guard,[this](){
             return this->m_currChunk.empty();
         });
@@ -77,7 +73,6 @@ void AsyncOStreamBuf::swapChunks()
 }
 
 int AsyncOStreamBuf::sync() {
-    //        std::cout << "sync" << std::endl;
     swapChunks();
     return 0;
 }
@@ -91,4 +86,24 @@ AsyncOstream::AsyncOstream(const std::string &name, size_t chunkSize) :
 bool AsyncOstream::isValid()
 {
     return m_streamBuf.isValid();
+}
+
+bool ElementaryFileOperations::read(std::ifstream &stream, int64_t startByte, int64_t endByte, std::vector<char> &data)
+{
+    std::lock_guard<std::mutex> locker(m_fileSystemGlobalMutex);
+    int64_t size = endByte - startByte;
+    data.resize(size);
+    stream.seekg(startByte);
+    stream.read(data.data(), size);
+    return bool(stream);
+}
+
+bool ElementaryFileOperations::write(std::ofstream &stream, std::vector<char> &data)
+{
+    std::lock_guard<std::mutex> locker(m_fileSystemGlobalMutex);
+    //data.resize(endByte - startByte);
+    stream.write(data.data(), data.size());
+    stream.flush();
+    return bool(stream);
+    //fwrite(data.data(), sizeof(char), data.size(), file) == data.size();
 }

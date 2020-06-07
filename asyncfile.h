@@ -13,29 +13,14 @@
 #include <sstream>
 #include <utility>
 
-
 class ElementaryFileOperations
 {
     inline static std::mutex m_fileSystemGlobalMutex;
 public:
-    static bool read(FILE* file, int64_t startByte, int64_t endByte, std::vector<char> &data)
-    {
-        std::unique_lock<std::mutex> locker(m_fileSystemGlobalMutex);
-        int64_t size = endByte - startByte;
-        data.resize(size);
-        return fread(data.data(), sizeof(char), size, file) == size;
-    }
+    static bool read(std::ifstream &stream, int64_t startByte, int64_t endByte, std::vector<char> &data);
 
-    static bool write(FILE* file, std::vector<char> &data)
-    {
-        std::unique_lock<std::mutex> locker(m_fileSystemGlobalMutex);
-        //data.resize(endByte - startByte);
-        return fwrite(data.data(), sizeof(char), data.size(), file) == data.size();
-    }
+    static bool write(std::ofstream &stream, std::vector<char> &data);
 };
-
-
-
 
 class AsyncOStreamBuf : public std::streambuf
 {
@@ -47,7 +32,7 @@ public:
 private:
     size_t m_maxChunkSize;
     bool m_isValid;
-    FILE* m_file;
+    std::ofstream m_file;
     std::mutex m_mutex;
     std::condition_variable m_condition;
     std::vector<char> m_currChunk;

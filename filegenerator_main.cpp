@@ -8,16 +8,16 @@
 #include <algorithm>
 #include "cmdopts.h"
 #include "asyncfile.h"
+#include "spdlog/spdlog.h"
 
 using namespace std;
 
 struct Options
 {
-    //int64_t filesize{10000000000}; //
-    int64_t filesize{1000};
+    int64_t filesize{10737418240}; // 10gb
     std::string filepath{"file.txt"};
-    int stringsCount{1000};
-    int numsCount{1000};
+    int stringsCount{5000};
+    int numsCount{10000};
     int maxStrLen{50};
     int maxNum{100000};
     bool fullRandom{false};
@@ -74,18 +74,16 @@ int main(int argc, const char* argv[])
     AsyncOstream stream(opts.filepath);
     if(!stream.isValid())
     {
-        cerr << "ERROR: can't open file:" << opts.filepath;
+        spdlog::error("ERROR: can't open file: {}", opts.filepath);
         return -1;
     }
 
     GeneratorEngine engine(opts);
 
-
-
     int64_t bytesCount = 0;
     int64_t linesCount = 0;
 
-    //slow variant, no big memory cache usage. no garantie to have same strings!
+    //"slow" variant, no big memory cache usage. no garantie to have the same strings!
     if (opts.fullRandom)
     {
         while (bytesCount < opts.filesize)
@@ -101,6 +99,7 @@ int main(int argc, const char* argv[])
     else
     {
         // generate cache...
+        spdlog::info("start generate cache...");
         std::vector<std::string> numsCache(opts.numsCount);
         for(int i = 0; i < opts.numsCount; i++)
             numsCache[i] = engine.genNum();
@@ -113,6 +112,7 @@ int main(int argc, const char* argv[])
         std::uniform_int_distribution<> numIndexDistributor(0, opts.numsCount - 1);
         std::uniform_int_distribution<> stringIndexDistributor(0, opts.stringsCount - 1);
 
+        spdlog::info("start write...");
         while (bytesCount < opts.filesize)
         {
             int numIndex = numIndexDistributor(indexGenerator);
@@ -126,8 +126,8 @@ int main(int argc, const char* argv[])
     std::chrono::system_clock::time_point currentTime = std::chrono::system_clock::now();
     auto time = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count();
     float bytesPerSecond = float(bytesCount) / (float(max(time, 1ll)) / 1000.0f);
-    cout << "GENERATE FILE FINISH." << " file:" << opts.filepath << " size:" << bytesCount << " lines:" << linesCount <<
-            " time:" << time << " msec. speed: " << int(bytesPerSecond)  << " bytes/sec" << endl;
+    spdlog::info("GENERATE FILE FINISH. file: {} size: {} lines: {} time: {}ms speed: {}bytes/sec",
+                 opts.filepath, bytesCount, linesCount, time, bytesPerSecond);
     return 0;
 }
 
