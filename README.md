@@ -61,6 +61,9 @@ outputFile{"out.txt"} - выходной файл
 cacheDir{""}; - директория для временного хранения отсортированных chunk-ов
 
 пример запуска для примерно 100-мегабайтного файла, который разобъется примерно на 10 частей:
+
 ./filegenereator.exe --filesize 100000000 --filepath input100000000.txt --stringsCount 1000
+
 ./sorter.exe --inputFile input100000000.txt --outputFile output100000000.txt --chunkSize 10000000
+
 
