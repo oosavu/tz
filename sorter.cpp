@@ -223,7 +223,7 @@ void merge(vector<IterativeFile> &iterativeChunks, const string & outputFile)
         else if (cmp < 0)
             return false;
         else
-            return p1.lineIterator->num > p1.lineIterator->num;
+            return p1.lineIterator->num > p2.lineIterator->num;
     };
 
     //load first
